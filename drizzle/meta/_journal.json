@@ -1,5 +1,13 @@
 {
   "version": "7",
   "dialect": "mysql",
-  "entries": []
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1782910159576,
+      "tag": "0000_third_mentor",
+      "breakpoints": true
+    }
+  ]
 }

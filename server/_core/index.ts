@@ -1,5 +1,5 @@
 import "dotenv/config";
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -8,6 +8,8 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { slackRouter } from "../slack";
+import { ghlRouter } from "../ghl";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -31,11 +33,38 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+
+  // Capture raw body for Slack signature verification BEFORE json parsing
+  // Skip for /slack/ghl which handles its own body parsing
+  app.use("/slack", (req: Request, _res: Response, next: NextFunction) => {
+    if (req.path === "/ghl") {
+      return next();
+    }
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    req.on("end", () => {
+      (req as Request & { rawBody?: Buffer }).rawBody = Buffer.concat(chunks);
+      next();
+    });
+    req.on("error", next);
+  });
+
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+
+  // Slack event relay
+  app.use("/slack", slackRouter);
+  // GHL slash command handler
+  app.use("/slack", ghlRouter);
+
+  // Health / root route
+  app.get("/", (_req: Request, res: Response) => {
+    res.setHeader("Content-Type", "text/html");
+    res.send(`<!doctype html><html><head><title>Slack→Make Relay</title></head><body style="font-family:monospace;padding:2rem"><h2>&#x2705; Slack &#x2192; Make Relay is live</h2><p>POST <code>/slack/events</code> to receive Slack events.</p></body></html>`);
+  });
   // tRPC API
   app.use(
     "/api/trpc",
