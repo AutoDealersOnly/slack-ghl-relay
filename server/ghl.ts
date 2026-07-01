@@ -123,24 +123,41 @@ ghlRouter.post("/ghl", async (req: Request, res: Response) => {
 
       const address = [d.street_address, d.city, d.state, d.zip].filter(Boolean).join(", ");
 
+      // Format date from YYYY-MM-DD to M/D/YYYY
+      const fmtDate = (s?: string) => {
+        if (!s) return "";
+        const parts = s.split("-");
+        if (parts.length !== 3) return s;
+        return `${parseInt(parts[1])}/${parseInt(parts[2])}/${parts[0]}`;
+      };
+
+      // Format tracking/phone to xxx-xxx-xxxx
+      const fmtPhone = (s?: string) => {
+        if (!s) return "";
+        const digits = s.replace(/\D/g, "");
+        const d10 = digits.length === 11 && digits[0] === "1" ? digits.slice(1) : digits;
+        if (d10.length === 10) return `${d10.slice(0, 3)}-${d10.slice(3, 6)}-${d10.slice(6)}`;
+        return s;
+      };
+
       markdown = `# GHL Production Details
 
 ## Campaign Info
 
 | Field | Value |
-|---|---|
+|:---|---|
 | **Production** | ${p.production ?? ""} |
 | **Dealership** | ${d.dealership_name ?? ""} |
-| **Event Start** | ${p.event_start ?? ""} |
-| **Event End** | ${p.event_end ?? ""} |
-| **SCF Date** | ${p.scf_date ?? ""} |
+| **Event Start** | ${fmtDate(p.event_start)} |
+| **Event End** | ${fmtDate(p.event_end)} |
+| **SCF Date** | ${fmtDate(p.scf_date)} |
 
 ## Dealership Info
 
 | Field | Value |
-|---|---|
+|:---|---|
 | **Address** | ${address} |
-| **Tracking #** | ${d.tracking ?? ""} |
+| **Tracking #** | ${fmtPhone(d.tracking)} |
 | **Website** | ${d.website ?? ""} |
 | **Alias** | ${d.alias ?? ""} |
 | **Position** | ${d.alias_position ?? ""} |
@@ -148,7 +165,7 @@ ghlRouter.post("/ghl", async (req: Request, res: Response) => {
 ## Production Details
 
 | Field | Value |
-|---|---|
+|:---|---|
 | **Mailer** | ${p.mailer ?? ""} |
 | **Mailer 2** | ${p.mailer_2 ?? ""} |
 | **Mail Count** | ${p.mail_count ?? ""} |
@@ -157,7 +174,7 @@ ghlRouter.post("/ghl", async (req: Request, res: Response) => {
 ## Team
 
 | Field | Value |
-|---|---|
+|:---|---|
 | **Sales Rep** | ${p.sales_rep ?? ""} |
 | **Closer** | ${p.closer ?? ""} |
 | **Greeter** | ${p.greeter ?? ""} |
