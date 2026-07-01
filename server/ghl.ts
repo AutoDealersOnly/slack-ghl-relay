@@ -109,6 +109,7 @@ ghlRouter.post("/ghl", async (req: Request, res: Response) => {
       },
       body: JSON.stringify({
         channel_id: channelId,
+        title: "Production",
         document_content: {
           type: "markdown",
           markdown,
