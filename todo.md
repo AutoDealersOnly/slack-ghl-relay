@@ -6,4 +6,8 @@
 - [x] Root route GET / with minimal health indicator
 - [x] Slack signing secret injected via environment variable
 - [x] Build /slack/ghl endpoint — calls GHL directly, creates Slack canvas (bypasses Make entirely)
-- [ ] Update Slack app slash command URL to permanent production URL after publish
+- [x] Update Slack app slash command URL to permanent production URL after publish
+- [x] Add canvas_log DB table to store channelId → canvasId mappings
+- [x] /slack/ghl saves canvas_id to DB after creation
+- [x] Build /slack/ghl-webhook endpoint for GHL workflow auto-update trigger
+- [ ] Set up GHL Production workflow to call /slack/ghl-webhook on record update

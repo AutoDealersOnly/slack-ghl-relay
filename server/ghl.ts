@@ -137,8 +137,9 @@ export function buildCanvasMarkdown(
 }
 
 /**
- * Create or replace a Slack canvas in a channel.
- * If an existing canvas ID is provided, it is deleted first.
+ * Create or update a Slack canvas in a channel.
+ * If an existing canvas ID is provided, it is updated in place (no ghost tabs).
+ * Otherwise a new canvas is created.
  */
 export async function createOrReplaceCanvas(
   channelId: string,
@@ -146,17 +147,35 @@ export async function createOrReplaceCanvas(
   markdown: string,
   existingCanvasId?: string | null
 ): Promise<string | null> {
-  // Delete existing canvas if present
+  // If we have an existing canvas, update it in place using canvases.edit
   if (existingCanvasId) {
-    await fetch("https://slack.com/api/canvases.delete", {
+    // First clear all existing content, then set new content
+    const editResp = await fetch("https://slack.com/api/canvases.edit", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ canvas_id: existingCanvasId }),
+      body: JSON.stringify({
+        canvas_id: existingCanvasId,
+        changes: [
+          {
+            operation: "replace",
+            document_content: {
+              type: "markdown",
+              markdown,
+            },
+          },
+        ],
+      }),
     });
-    console.log(`[ghl] Deleted old canvas: ${existingCanvasId}`);
+    const editData = (await editResp.json()) as { ok: boolean; error?: string };
+    if (editData.ok) {
+      console.log(`[ghl] Canvas updated in place: ${existingCanvasId} in channel ${channelId}`);
+      return existingCanvasId;
+    }
+    // If edit fails (e.g. canvas was manually deleted), fall through to create a new one
+    console.warn(`[ghl] Canvas edit failed (${editData.error}), creating new canvas`);
   }
 
   const canvasResp = await fetch("https://slack.com/api/canvases.create", {
