@@ -335,12 +335,23 @@ ghlRouter.post("/proof-status", async (req: Request, res: Response) => {
     const channelId = rows[0].channelId;
 
     const stage = (payload.proof_stage ?? "").trim();
-    const mailer = payload.mailer ?? "";
-    const mailer2 = payload.mailer_2 ?? "";
-    const eventStart = fmtDate(payload.event_start);
-    const eventEnd = fmtDate(payload.event_end);
-    const dealership = payload.dealership_name ?? "";
-    const jobNumbers = payload.job_numbers ?? "";
+
+    // Fetch fresh production record from GHL to get all fields + dealership name
+    const record = await fetchProductionRecord(channelName);
+    const p = record?.properties ?? {};
+    const dealershipRelation = record?.relations?.find(
+      (r) => r.objectKey === "custom_objects.dealerships"
+    );
+    const d = dealershipRelation
+      ? (await fetchDealership(dealershipRelation.recordId)) ?? {}
+      : {};
+
+    const mailer = p.mailer ?? payload.mailer ?? "";
+    const mailer2 = p.mailer_2 ?? payload.mailer_2 ?? "";
+    const eventStart = fmtDate(p.event_start ?? payload.event_start);
+    const eventEnd = fmtDate(p.event_end ?? payload.event_end);
+    const dealership = d.dealership_name ?? payload.dealership_name ?? "";
+    const jobNumbers = p.job_numbers ?? payload.job_numbers ?? "";
 
     // Build mailpiece string
     const mailpieces = [mailer, mailer2].filter(Boolean).join(" / ");
