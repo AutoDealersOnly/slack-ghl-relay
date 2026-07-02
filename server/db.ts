@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { canvasLog, InsertUser, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -90,3 +90,38 @@ export async function getUserByOpenId(openId: string) {
 }
 
 // TODO: add feature queries here as your schema grows.
+
+/**
+ * Upsert a canvas record: insert on first run, update canvasId on subsequent runs.
+ */
+export async function upsertCanvasLog(
+  channelId: string,
+  channelName: string,
+  canvasId: string
+): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot upsert canvas log: database not available");
+    return;
+  }
+  await db
+    .insert(canvasLog)
+    .values({ channelId, channelName, canvasId })
+    .onDuplicateKeyUpdate({ set: { canvasId, channelName } });
+}
+
+/**
+ * Look up the most recent canvas ID for a given channel name.
+ */
+export async function getCanvasByChannelName(
+  channelName: string
+): Promise<string | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .select()
+    .from(canvasLog)
+    .where(eq(canvasLog.channelName, channelName))
+    .limit(1);
+  return rows.length > 0 ? rows[0].canvasId : null;
+}

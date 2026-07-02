@@ -26,3 +26,22 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
 // TODO: Add your tables here
+
+/**
+ * Tracks the most recent Slack canvas created per channel.
+ * Used by the GHL webhook to find and replace the canvas when a record is updated.
+ */
+export const canvasLog = mysqlTable("canvas_log", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Slack channel ID (e.g. C0BDSFS7LK1) */
+  channelId: varchar("channelId", { length: 32 }).notNull().unique(),
+  /** Slack channel name (e.g. 2607-westshore-honda-ame) */
+  channelName: varchar("channelName", { length: 128 }).notNull(),
+  /** Slack canvas ID (e.g. F0BEM0U5T6V) */
+  canvasId: varchar("canvasId", { length: 32 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CanvasLog = typeof canvasLog.$inferSelect;
+export type InsertCanvasLog = typeof canvasLog.$inferInsert;
