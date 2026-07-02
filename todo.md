@@ -10,4 +10,5 @@
 - [x] Add canvas_log DB table to store channelId → canvasId mappings
 - [x] /slack/ghl saves canvas_id to DB after creation
 - [x] Build /slack/ghl-webhook endpoint for GHL workflow auto-update trigger
-- [ ] Set up GHL Production workflow to call /slack/ghl-webhook on record update
+- [x] Set up GHL Production workflow to call /slack/ghl-webhook on record update
+- [x] Switch canvas update to in-place edit (canvases.edit) to eliminate ghost Deleted file tabs

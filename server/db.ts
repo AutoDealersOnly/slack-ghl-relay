@@ -125,3 +125,12 @@ export async function getCanvasByChannelName(
     .limit(1);
   return rows.length > 0 ? rows[0].canvasId : null;
 }
+
+/**
+ * Remove the canvas log entry for a channel (e.g. when the canvas has been deleted).
+ */
+export async function clearCanvasLog(channelId: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(canvasLog).where(eq(canvasLog.channelId, channelId));
+}

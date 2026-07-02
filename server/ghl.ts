@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { upsertCanvasLog, getCanvasByChannelName } from "./db";
+import { upsertCanvasLog, getCanvasByChannelName, clearCanvasLog } from "./db";
 
 export const GHL_API_KEY = "pit-4ceff49d-22c5-42df-bc34-8fb8a6a29fe2";
 export const GHL_LOCATION_ID = "UGJmliC4GETAgeO6IDXa";
@@ -139,7 +139,9 @@ export function buildCanvasMarkdown(
 /**
  * Create or update a Slack canvas in a channel.
  * If an existing canvas ID is provided, it is updated in place (no ghost tabs).
- * Otherwise a new canvas is created.
+ * Slack's canvases.edit returns ok:true even for deleted canvases, so we verify
+ * the canvas is still accessible via canvases.sections.lookup after editing.
+ * If it's gone, we clear the stale DB record and create a fresh canvas.
  */
 export async function createOrReplaceCanvas(
   channelId: string,
@@ -147,9 +149,8 @@ export async function createOrReplaceCanvas(
   markdown: string,
   existingCanvasId?: string | null
 ): Promise<string | null> {
-  // If we have an existing canvas, update it in place using canvases.edit
+  // If we have an existing canvas, try to update it in place using canvases.edit
   if (existingCanvasId) {
-    // First clear all existing content, then set new content
     const editResp = await fetch("https://slack.com/api/canvases.edit", {
       method: "POST",
       headers: {
@@ -170,12 +171,31 @@ export async function createOrReplaceCanvas(
       }),
     });
     const editData = (await editResp.json()) as { ok: boolean; error?: string };
+
     if (editData.ok) {
-      console.log(`[ghl] Canvas updated in place: ${existingCanvasId} in channel ${channelId}`);
-      return existingCanvasId;
+      // Slack returns ok:true even for deleted canvases — verify it's still accessible
+      const lookupResp = await fetch(
+        `https://slack.com/api/canvases.sections.lookup?canvas_id=${existingCanvasId}&criteria={"contains_text":""}`,
+        {
+          headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}` },
+        }
+      );
+      const lookupData = (await lookupResp.json()) as { ok: boolean; error?: string };
+
+      if (lookupData.ok) {
+        console.log(`[ghl] Canvas updated in place: ${existingCanvasId} in channel ${channelId}`);
+        return existingCanvasId;
+      }
+      // Canvas is gone (deleted) — clear stale DB record and fall through to create new
+      console.warn(
+        `[ghl] Canvas ${existingCanvasId} no longer accessible (${lookupData.error}), clearing stale record and creating new canvas`
+      );
+      await clearCanvasLog(channelId);
+    } else {
+      // Edit API returned an error — clear stale record and fall through
+      console.warn(`[ghl] Canvas edit failed (${editData.error}), creating new canvas`);
+      await clearCanvasLog(channelId);
     }
-    // If edit fails (e.g. canvas was manually deleted), fall through to create a new one
-    console.warn(`[ghl] Canvas edit failed (${editData.error}), creating new canvas`);
   }
 
   const canvasResp = await fetch("https://slack.com/api/canvases.create", {
