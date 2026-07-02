@@ -365,7 +365,7 @@ ghlRouter.post("/proof-status", async (req: Request, res: Response) => {
     let headerText = "";
     const blocks: SlackBlock[] = [];
 
-    if (stage === "Request Proof") {
+    if (stage === "request_proof" || stage === "Request Proof") {
       color = "#0066CC"; // blue
       headerText = "🖨️ Proof Request";
       blocks.push({
@@ -375,7 +375,7 @@ ghlRouter.post("/proof-status", async (req: Request, res: Response) => {
           text: `*🖨️ Proof Request*\n<@U014TE8F60Z> Proof request *${mailpieces}* ${eventStart} - ${eventEnd} for *${dealership}*`,
         },
       });
-    } else if (stage === "Proofing Needed") {
+    } else if (stage === "proofing_needed" || stage === "Proofing Needed") {
       color = "#CC0000"; // red
       headerText = "📋 Proofing Needed";
       blocks.push({
@@ -385,7 +385,7 @@ ghlRouter.post("/proof-status", async (req: Request, res: Response) => {
           text: `*📋 Proofing Needed*\n<!subteam^S014MV4QKLN> proofing needed on the mailpiece(s) above. Thanks!!!`,
         },
       });
-    } else if (stage === "Approved to Upload") {
+    } else if (stage === "approved_to_upload" || stage === "Approved to Upload") {
       color = "#FFB300"; // yellow/amber
       headerText = "✅ Approved to Upload";
       blocks.push({
@@ -395,7 +395,7 @@ ghlRouter.post("/proof-status", async (req: Request, res: Response) => {
           text: `*✅ Approved to Upload*\n<@U014TE8F60Z> approved to upload Job #*${jobNumbers}*`,
         },
       });
-    } else if (stage === "Sent to Print") {
+    } else if (stage === "sent_to_print" || stage === "Sent to Print") {
       color = "#2EB67D"; // green
       headerText = "📤 Sent to Print";
       blocks.push({
