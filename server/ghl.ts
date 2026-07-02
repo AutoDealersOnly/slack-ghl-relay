@@ -294,6 +294,138 @@ ghlRouter.post("/ghl", async (req: Request, res: Response) => {
   }
 });
 
+// POST /slack/proof-status — GHL proof stage dropdown webhook
+ghlRouter.post("/proof-status", async (req: Request, res: Response) => {
+  res.status(200).send("ok");
+
+  try {
+    const payload = req.body as Record<string, string>;
+    console.log("[proof-status] Received payload:", JSON.stringify(payload));
+
+    // Expected fields from GHL workflow:
+    // production_name, proof_stage, mailer, mailer_2, event_start, event_end, dealership_name, job_numbers
+    // channel_name is derived from production_name if not provided
+    let channelName = payload.channel_name;
+    if (!channelName && payload.production_name) {
+      channelName = payload.production_name.toLowerCase().replace(/\s+/g, "-");
+    }
+    if (!channelName) {
+      console.warn("[proof-status] No channel_name or production_name — skipping");
+      return;
+    }
+
+    // Look up channel ID from DB
+    const { getDb } = await import("./db");
+    const { canvasLog } = await import("../drizzle/schema");
+    const { eq } = await import("drizzle-orm");
+    const db = await getDb();
+    if (!db) {
+      console.warn("[proof-status] No DB connection");
+      return;
+    }
+    const rows = await db
+      .select()
+      .from(canvasLog)
+      .where(eq(canvasLog.channelName, channelName))
+      .limit(1);
+    if (rows.length === 0) {
+      console.warn(`[proof-status] No channel ID found for ${channelName} — run /ghl first`);
+      return;
+    }
+    const channelId = rows[0].channelId;
+
+    const stage = (payload.proof_stage ?? "").trim();
+    const mailer = payload.mailer ?? "";
+    const mailer2 = payload.mailer_2 ?? "";
+    const eventStart = fmtDate(payload.event_start);
+    const eventEnd = fmtDate(payload.event_end);
+    const dealership = payload.dealership_name ?? "";
+    const jobNumbers = payload.job_numbers ?? "";
+
+    // Build mailpiece string
+    const mailpieces = [mailer, mailer2].filter(Boolean).join(" / ");
+
+    type SlackBlock = {
+      type: string;
+      text?: { type: string; text: string; emoji?: boolean };
+    };
+
+    let color = "#0000FF";
+    let headerText = "";
+    const blocks: SlackBlock[] = [];
+
+    if (stage === "Request Proof") {
+      color = "#0066CC"; // blue
+      headerText = "🖨️ Proof Request";
+      blocks.push({
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `*🖨️ Proof Request*\n<@U014TE8F60Z> Proof request *${mailpieces}* ${eventStart} - ${eventEnd} for *${dealership}*`,
+        },
+      });
+    } else if (stage === "Proofing Needed") {
+      color = "#CC0000"; // red
+      headerText = "📋 Proofing Needed";
+      blocks.push({
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `*📋 Proofing Needed*\n<!subteam^S014MV4QKLN> proofing needed on the mailpiece(s) above. Thanks!!!`,
+        },
+      });
+    } else if (stage === "Approved to Upload") {
+      color = "#FFB300"; // yellow/amber
+      headerText = "✅ Approved to Upload";
+      blocks.push({
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `*✅ Approved to Upload*\n<@U014TE8F60Z> approved to upload Job #*${jobNumbers}*`,
+        },
+      });
+    } else if (stage === "Sent to Print") {
+      color = "#2EB67D"; // green
+      headerText = "📤 Sent to Print";
+      blocks.push({
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `*📤 Sent to Print*\nSent to print 📤`,
+        },
+      });
+    } else {
+      console.warn(`[proof-status] Unknown stage: "${stage}" — skipping`);
+      return;
+    }
+
+    const msgResp = await fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        channel: channelId,
+        attachments: [
+          {
+            color,
+            blocks,
+          },
+        ],
+      }),
+    });
+    const msgData = (await msgResp.json()) as { ok: boolean; error?: string };
+    if (msgData.ok) {
+      console.log(`[proof-status] Posted "${stage}" to channel ${channelId}`);
+    } else {
+      console.error(`[proof-status] Failed to post message: ${msgData.error}`);
+    }
+  } catch (err) {
+    console.error("[proof-status] Error:", err);
+  }
+});
+
 // POST /ghl-webhook — GHL workflow webhook (fires when production record is updated)
 ghlRouter.post("/ghl-webhook", async (req: Request, res: Response) => {
   // Respond immediately so GHL doesn't retry
