@@ -564,6 +564,21 @@ ghlRouter.post("/dealership-sync", async (req: Request, res: Response) => {
     }
 
     console.log(`[dealership-sync] Done for loc ${locId}: ${updated} updated, ${skipped} skipped`);
+
+    // Post confirmation message to notification channel
+    const notifyChannelId = "C0BDSFS7LK1"; // TEST: ABC Test channel — swap to C0ADXCMLS4W for production
+    const dealershipName = d.dealership_name ?? locId;
+    await fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        channel: notifyChannelId,
+        text: `Dealership Custom Values have been updated in *${dealershipName}*. Please review. <@U014TE8F60Z> <@U01403J8J3H>`,
+      }),
+    });
   } catch (err) {
     console.error("[dealership-sync] Error:", err);
   }
