@@ -543,7 +543,13 @@ ghlRouter.post("/dealership-sync", async (req: Request, res: Response) => {
     let skipped = 0;
     for (const [key, value] of Object.entries(customValueUpdates)) {
       if (!value) { skipped++; continue; }
-      const existing = existingValues.find((cv) => cv.fieldKey === `custom_values.${key}`);
+      // GHL returns fieldKey wrapped in template syntax: "{{ custom_values.key }}"
+      // Normalize by stripping {{ }} and whitespace before matching
+      const normalizedKey = `custom_values.${key}`;
+      const existing = existingValues.find((cv) => {
+        const normalized = cv.fieldKey.replace(/\{\{\s*/g, '').replace(/\s*\}\}/g, '').trim();
+        return normalized === normalizedKey;
+      });
       if (!existing) {
         console.warn(`[dealership-sync] No custom value found for key custom_values.${key} in loc ${locId}`);
         skipped++;
@@ -558,7 +564,7 @@ ghlRouter.post("/dealership-sync", async (req: Request, res: Response) => {
             Version: "2021-07-28",
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ value }),
+          body: JSON.stringify({ name: existing.name, value }),
         }
       );
       const updateData = (await updateResp.json()) as { customValue?: { id: string } };
