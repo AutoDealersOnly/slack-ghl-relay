@@ -499,7 +499,6 @@ ghlRouter.post("/dealership-sync", async (req: Request, res: Response) => {
 
     // Build address strings
     const addressParts = [d.street_address, d.city, d.state, String(d.zip ?? "").trim()].filter(Boolean);
-    const addressShort = d.street_address ?? "";
     const addressFull = addressParts.join(", ");
 
     // Split alias into first name + full name
@@ -509,7 +508,7 @@ ghlRouter.post("/dealership-sync", async (req: Request, res: Response) => {
     // Map ADO fields → subaccount custom value keys
     const customValueUpdates: Record<string, string> = {
       dealership_name: d.dealership_name ?? "",
-      dealership_address: addressShort,
+      dealership_address: addressFull,
       dealership_address_full: addressFull,
       dealer_website: d.website ?? "",
       dealership_tracking_number: fmtPhone(d.tracking),
