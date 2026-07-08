@@ -402,7 +402,7 @@ ghlRouter.post("/proof-status", async (req: Request, res: Response) => {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `*📤 Sent to Print*\nSent to print 📤`,
+          text: `*📤 Sent to Print*\nSent to print 📤 <@U01403J8J3H>`,
         },
       });
     } else {
