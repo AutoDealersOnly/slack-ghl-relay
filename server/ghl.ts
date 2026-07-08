@@ -25,6 +25,7 @@ interface DealershipProperties {
   phone?: string;
   coop_dealer?: string;
   contact_owner?: string;
+  api_key?: string;
 }
 
 interface ProductionProperties {
@@ -490,6 +491,12 @@ ghlRouter.post("/dealership-sync", async (req: Request, res: Response) => {
       return;
     }
 
+    const subApiKey = (d as any).api_key?.trim();
+    if (!subApiKey) {
+      console.warn(`[dealership-sync] No api_key on dealership record ${recordId} — skipping`);
+      return;
+    }
+
     // Build address strings
     const addressParts = [d.street_address, d.city, d.state, String(d.zip ?? "").trim()].filter(Boolean);
     const addressShort = d.street_address ?? "";
@@ -519,11 +526,11 @@ ghlRouter.post("/dealership-sync", async (req: Request, res: Response) => {
     // Fetch existing custom values for the subaccount
     const cvResp = await fetch(
       `https://services.leadconnectorhq.com/locations/${locId}/customValues`,
-      {
-        headers: {
-          Authorization: `Bearer ${GHL_API_KEY}`,
-          Version: "2021-07-28",
-        },
+        {
+          headers: {
+            Authorization: `Bearer ${subApiKey}`,
+            Version: "2021-07-28",
+          },
       }
     );
     const cvData = (await cvResp.json()) as {
@@ -547,7 +554,7 @@ ghlRouter.post("/dealership-sync", async (req: Request, res: Response) => {
         {
           method: "PUT",
           headers: {
-            Authorization: `Bearer ${GHL_API_KEY}`,
+            Authorization: `Bearer ${subApiKey}`,
             Version: "2021-07-28",
             "Content-Type": "application/json",
           },
