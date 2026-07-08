@@ -12,6 +12,7 @@ interface DealershipProperties {
   state?: string;
   zip?: number | string;
   tracking?: string;
+  tracking__2?: string;
   website?: string;
   alias?: string;
   alias_position?: string;
@@ -512,6 +513,7 @@ ghlRouter.post("/dealership-sync", async (req: Request, res: Response) => {
       dealership_address_full: addressFull,
       dealer_website: d.website ?? "",
       dealership_tracking_number: fmtPhone(d.tracking),
+      dealership_tracking_number_2: fmtPhone(d.tracking__2),
       our_hours: d.hours ?? "",
       crm_email: d.crm_email ?? "",
       alias_name: aliasName,
