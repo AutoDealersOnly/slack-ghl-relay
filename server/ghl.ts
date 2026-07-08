@@ -580,7 +580,7 @@ ghlRouter.post("/dealership-sync", async (req: Request, res: Response) => {
     console.log(`[dealership-sync] Done for loc ${locId}: ${updated} updated, ${skipped} skipped`);
 
     // Post confirmation message to notification channel
-    const notifyChannelId = "C0BDSFS7LK1"; // TEST: ABC Test channel — swap to C0ADXCMLS4W for production
+    const notifyChannelId = "C0ADXCMLS4W"; // GHL New Subaccounts channel
     const dealershipName = d.dealership_name ?? locId;
     await fetch("https://slack.com/api/chat.postMessage", {
       method: "POST",
