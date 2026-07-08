@@ -450,11 +450,11 @@ ghlRouter.post("/proof-status", async (req: Request, res: Response) => {
 
 // POST /dealership-sync — fires when Dealership Verified field is set to "verified"
 ghlRouter.post("/dealership-sync", async (req: Request, res: Response) => {
-  res.status(200).send("ok");
-
   try {
     const payload = req.body as Record<string, string>;
     console.log("[dealership-sync] Received payload:", JSON.stringify(payload));
+    // Echo payload back so GHL execution log shows what was received
+    res.status(200).json({ received: payload });
 
     const verifiedValue = (payload.verified ?? "").trim().toLowerCase();
     if (verifiedValue !== "verified") {
