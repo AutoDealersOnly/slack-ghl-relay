@@ -15,6 +15,16 @@ interface DealershipProperties {
   website?: string;
   alias?: string;
   alias_position?: string;
+  hours?: string;
+  crm_email?: string;
+  brand?: string;
+  crm_link?: string;
+  passcode?: string;
+  loc_id?: string;
+  verified?: string;
+  phone?: string;
+  coop_dealer?: string;
+  contact_owner?: string;
 }
 
 interface ProductionProperties {
@@ -434,6 +444,128 @@ ghlRouter.post("/proof-status", async (req: Request, res: Response) => {
     }
   } catch (err) {
     console.error("[proof-status] Error:", err);
+  }
+});
+
+// POST /dealership-sync — fires when Dealership Verified field is set to "verified"
+ghlRouter.post("/dealership-sync", async (req: Request, res: Response) => {
+  res.status(200).send("ok");
+
+  try {
+    const payload = req.body as Record<string, string>;
+    console.log("[dealership-sync] Received payload:", JSON.stringify(payload));
+
+    const verifiedValue = (payload.verified ?? "").trim().toLowerCase();
+    if (verifiedValue !== "verified") {
+      console.log(`[dealership-sync] Verified = "${verifiedValue}" — skipping`);
+      return;
+    }
+
+    const recordId = payload.record_id;
+    if (!recordId) {
+      console.warn("[dealership-sync] No record_id in payload — skipping");
+      return;
+    }
+
+    // Fetch full dealership record from ADO GHL
+    const resp = await fetch(
+      `https://services.leadconnectorhq.com/objects/custom_objects.dealerships/records/${recordId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${GHL_API_KEY}`,
+          Version: "v3",
+        },
+      }
+    );
+    const data = (await resp.json()) as { record?: { properties?: DealershipProperties } };
+    const d = data.record?.properties;
+    if (!d) {
+      console.warn(`[dealership-sync] No dealership record found for ${recordId}`);
+      return;
+    }
+
+    const locId = d.loc_id?.trim();
+    if (!locId) {
+      console.warn(`[dealership-sync] No loc_id on dealership record ${recordId} — skipping`);
+      return;
+    }
+
+    // Build address strings
+    const addressParts = [d.street_address, d.city, d.state, String(d.zip ?? "").trim()].filter(Boolean);
+    const addressShort = d.street_address ?? "";
+    const addressFull = addressParts.join(", ");
+
+    // Split alias into first name + full name
+    const aliasName = d.alias ?? "";
+    const aliasFirstName = aliasName.split(" ")[0] ?? "";
+
+    // Map ADO fields → subaccount custom value keys
+    const customValueUpdates: Record<string, string> = {
+      dealership_name: d.dealership_name ?? "",
+      dealership_address: addressShort,
+      dealership_address_full: addressFull,
+      dealer_website: d.website ?? "",
+      dealership_tracking_number: fmtPhone(d.tracking),
+      our_hours: d.hours ?? "",
+      crm_email: d.crm_email ?? "",
+      alias_name: aliasName,
+      alias_1st_name: aliasFirstName,
+      alias_position: d.alias_position ?? "",
+      brand: d.brand ?? "",
+      crm_link: d.crm_link ?? "",
+      passcode: d.passcode ?? "",
+    };
+
+    // Fetch existing custom values for the subaccount
+    const cvResp = await fetch(
+      `https://services.leadconnectorhq.com/locations/${locId}/customValues`,
+      {
+        headers: {
+          Authorization: `Bearer ${GHL_API_KEY}`,
+          Version: "2021-07-28",
+        },
+      }
+    );
+    const cvData = (await cvResp.json()) as {
+      customValues?: Array<{ id: string; name: string; fieldKey: string; value: string }>;
+    };
+    const existingValues = cvData.customValues ?? [];
+
+    // Update each custom value by matching on fieldKey
+    let updated = 0;
+    let skipped = 0;
+    for (const [key, value] of Object.entries(customValueUpdates)) {
+      if (!value) { skipped++; continue; }
+      const existing = existingValues.find((cv) => cv.fieldKey === `custom_values.${key}`);
+      if (!existing) {
+        console.warn(`[dealership-sync] No custom value found for key custom_values.${key} in loc ${locId}`);
+        skipped++;
+        continue;
+      }
+      const updateResp = await fetch(
+        `https://services.leadconnectorhq.com/locations/${locId}/customValues/${existing.id}`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${GHL_API_KEY}`,
+            Version: "2021-07-28",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ value }),
+        }
+      );
+      const updateData = (await updateResp.json()) as { customValue?: { id: string } };
+      if (updateData.customValue?.id) {
+        updated++;
+      } else {
+        console.warn(`[dealership-sync] Failed to update custom_values.${key}:`, JSON.stringify(updateData));
+        skipped++;
+      }
+    }
+
+    console.log(`[dealership-sync] Done for loc ${locId}: ${updated} updated, ${skipped} skipped`);
+  } catch (err) {
+    console.error("[dealership-sync] Error:", err);
   }
 });
 
