@@ -13,14 +13,14 @@ Track which GHL subaccounts have had their Private Integration API key added to 
 | Albany Nissan | ✅ Done |
 | ALM GMC South | ✅ Done |
 | ALM Hyundai Macon | ❌ No ADO record |
-| ALM Mazda South | ⬜ Pending |
+| ALM Mazda South | ✅ Done |
 | Beaver Mitsubishi | ✅ Done |
 | Beaver Toyota | ✅ Done |
-| Benson Hyundai | ⬜ Pending |
-| Benson Kia of Spartanburg | ⬜ Pending |
+| Benson Hyundai | ✅ Done |
+| Benson Kia of Spartanburg | ✅ Done |
 | Benson Nissan Easley | ✅ Done |
-| Benson's Ingram Park Chrysler | ⬜ Pending |
-| Bentley Hyundai | ⬜ Pending |
+| Benson's Ingram Park Chrysler | ✅ Done |
+| Bentley Hyundai | ✅ Done |
 | Benton Nissan of Colombia | ⬜ Pending |
 | Bill Penney Toyota | ⬜ Pending |
 | Bill Penney Toyota of Jasper | ⬜ Pending |
