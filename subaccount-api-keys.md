@@ -9,10 +9,10 @@ Track which GHL subaccounts have had their Private Integration API key added to 
 | Subaccount | Status |
 |---|---|
 | Airport Chrysler Dodge Jeep | ✅ Done |
-| Albany Mitsubishi | ⬜ Pending |
-| Albany Nissan | ⬜ Pending |
-| ALM GMC South | ⬜ Pending |
-| ALM Hyundai Macon | ⬜ Pending |
+| Albany Mitsubishi | ✅ Done |
+| Albany Nissan | ✅ Done |
+| ALM GMC South | ✅ Done |
+| ALM Hyundai Macon | ❌ No ADO record |
 | ALM Mazda South | ⬜ Pending |
 | Beaver Mitsubishi | ✅ Done |
 | Beaver Toyota | ✅ Done |
