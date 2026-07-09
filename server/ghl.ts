@@ -639,6 +639,7 @@ ghlRouter.post("/ghl-webhook", async (req: Request, res: Response) => {
     }
 
     const p = record.properties;
+    console.log(`[ghl-webhook] Production properties for ${channelName}:`, JSON.stringify(p));
     const dealershipRelation = record.relations?.find(
       (r) => r.objectKey === "custom_objects.dealerships"
     );
