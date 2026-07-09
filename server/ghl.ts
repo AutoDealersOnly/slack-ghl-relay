@@ -131,6 +131,7 @@ export function buildCanvasMarkdown(
 | SCF Date | ${fmtDate(p.scf_date)} |
 | **━━━ DEALERSHIP INFO ━━━** | |
 | Address | ${address} |
+| Sales Hours | ${d.hours ?? ""} |
 | Tracking # | ${fmtPhone(d.tracking)} |
 | Website | ${d.website ?? ""} |
 | Alias | ${d.alias ?? ""} |
