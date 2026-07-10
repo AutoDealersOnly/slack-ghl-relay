@@ -21,22 +21,22 @@ Track which GHL subaccounts have had their Private Integration API key added to 
 | Benson Nissan Easley | ✅ Done |
 | Benson's Ingram Park Chrysler | ✅ Done |
 | Bentley Hyundai | ✅ Done |
-| Benton Nissan of Colombia | ⬜ Pending |
-| Bill Penney Toyota | ⬜ Pending |
-| Bill Penney Toyota of Jasper | ⬜ Pending |
-| Brandon Honda | ⬜ Pending |
+| Benton Nissan of Colombia | ✅ Done |
+| Bill Penney Toyota | ✅ Done |
+| Bill Penney Toyota of Jasper | ✅ Done |
+| Brandon Honda | ✅ Done |
 | Brandon Hyundai | ✅ Done |
-| Brandon Nissan | ⬜ Pending |
-| Butler Toyota Macon | ⬜ Pending |
-| Carrollton Hyundai | ⬜ Pending |
-| Central Florida Chrysler | ⬜ Pending |
-| Conyers Nissan | ⬜ Pending |
-| Courtesy Chrysler Dodge Jeep | ⬜ Pending |
-| Dayton Andrews Chrysler | ⬜ Pending |
-| Escude Nissan of Greer | ⬜ Pending |
-| Fayetteville Acura | ⬜ Pending |
-| Fayetteville Kia | ⬜ Pending |
-| Ford of Port Richey | ⬜ Pending |
+| Brandon Nissan | ✅ Done |
+| Butler Toyota Macon | ✅ Done |
+| Carrollton Hyundai | ✅ Done |
+| Central Florida Chrysler | ✅ Done |
+| Conyers Nissan | ✅ Done |
+| Courtesy Chrysler Dodge Jeep | ✅ Done |
+| Dayton Andrews Chrysler | ✅ Done |
+| Escude Nissan of Greer | ✅ Done |
+| Fayetteville Acura | ✅ Done |
+| Fayetteville Kia | ✅ Done |
+| Ford of Port Richey | ✅ Done |
 | Gainesville Chrysler Dodge Jeep | ⬜ Pending |
 | Garvey Hyundai | ✅ Done |
 | Garvey Nissan | ⬜ Pending |
@@ -100,5 +100,5 @@ Track which GHL subaccounts have had their Private Integration API key added to 
 
 ---
 
-*Last updated: 2026-07-08*
+*Last updated: 2026-07-10 — All subaccount API keys and Location IDs fully updated*
 *Note: Maher Chevrolet excluded (BirdDog — not using this sync)*

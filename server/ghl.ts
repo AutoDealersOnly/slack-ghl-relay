@@ -133,6 +133,7 @@ export function buildCanvasMarkdown(
 | Address | ${address} |
 | Sales Hours | ${d.hours ?? ""} |
 | Tracking # | ${fmtPhone(d.tracking)} |
+| Tracking # 2 | ${fmtPhone(d.tracking__2)} |
 | Website | ${d.website ?? ""} |
 | Alias | ${d.alias ?? ""} |
 | Position | ${d.alias_position ?? ""} |
