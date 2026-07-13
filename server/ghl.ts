@@ -1141,13 +1141,6 @@ ghlRouter.post("/backfill-archive-jobs", async (req: Request, res: Response) => 
         const archiveMonth = archiveDate.getUTCMonth() + 1;
         const archiveYear = archiveDate.getUTCFullYear();
 
-        // If archive date is already in the past, skip scheduling but log it
-        if (archiveDate < new Date()) {
-          console.log(`[backfill-archive-jobs] Archive date ${archiveDate.toISOString()} is in the past for ${channelName} — skipping`);
-          results.push({ channelName, status: "past_date", archiveDate: archiveDate.toISOString() });
-          continue;
-        }
-
         // Resolve channelId if we only have "unknown"
         let resolvedChannelId = channelId;
         if (resolvedChannelId === "unknown") {
@@ -1169,6 +1162,27 @@ ghlRouter.post("/backfill-archive-jobs", async (req: Request, res: Response) => 
           resolvedChannelId = found.id;
         }
 
+        const archiveDateStr = `${archiveYear}-${String(archiveMonth).padStart(2, "0")}-${String(archiveDay).padStart(2, "0")}`;
+
+        // If archive date is already in the past, archive the channel immediately
+        if (archiveDate < new Date()) {
+          console.log(`[backfill-archive-jobs] Archive date ${archiveDateStr} is in the past for ${channelName} — archiving now`);
+          const archiveResp = await fetch("https://slack.com/api/conversations.archive", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ channel: resolvedChannelId }),
+          });
+          const archiveData = (await archiveResp.json()) as { ok: boolean; error?: string };
+          if (archiveData.ok || archiveData.error === "already_archived") {
+            console.log(`[backfill-archive-jobs] Archived ${channelName} immediately (past due)`);
+            results.push({ channelName, status: "archived_now", archiveDate: archiveDateStr });
+          } else {
+            console.error(`[backfill-archive-jobs] Failed to archive ${channelName}: ${archiveData.error}`);
+            results.push({ channelName, status: "error" });
+          }
+          continue;
+        }
+
         // Insert DB record
         await insertChannelArchiveJob(resolvedChannelId, channelName, archiveDate);
 
@@ -1181,13 +1195,12 @@ ghlRouter.post("/backfill-archive-jobs", async (req: Request, res: Response) => 
             path: "/api/scheduled/archive-channel",
             method: "POST",
             payload: { channel_id: resolvedChannelId },
-            description: `Auto-archive #${channelName} on ${archiveYear}-${String(archiveMonth).padStart(2, "0")}-${String(archiveDay).padStart(2, "0")} (3 days after campaign end)`,
+            description: `Auto-archive #${channelName} on ${archiveDateStr} (3 days after campaign end)`,
           },
           ""
         );
         await updateChannelArchiveJobTaskUid(resolvedChannelId, jobResult.taskUid);
 
-        const archiveDateStr = `${archiveYear}-${String(archiveMonth).padStart(2, "0")}-${String(archiveDay).padStart(2, "0")}`;
         console.log(`[backfill-archive-jobs] Scheduled ${channelName} for archive on ${archiveDateStr} (taskUid: ${jobResult.taskUid})`);
         results.push({ channelName, status: "scheduled", archiveDate: archiveDateStr });
       } catch (err) {
@@ -1198,15 +1211,17 @@ ghlRouter.post("/backfill-archive-jobs", async (req: Request, res: Response) => 
 
     // Post summary to Slack notification channel
     const scheduled = results.filter((r) => r.status === "scheduled");
-    const skipped = results.filter((r) => r.status !== "scheduled");
+    const archivedNow = results.filter((r) => r.status === "archived_now");
+    const skipped = results.filter((r) => r.status !== "scheduled" && r.status !== "archived_now");
     const summaryLines = [
-      `*Archive job backfill complete* — ${scheduled.length} scheduled, ${skipped.length} skipped`,
+      `*Archive job backfill complete* — ${scheduled.length} scheduled, ${archivedNow.length} archived immediately, ${skipped.length} skipped`,
       ...scheduled.map((r) => `  ✅ #${r.channelName} → archive on ${r.archiveDate}`),
+      ...archivedNow.map((r) => `  🗄️ #${r.channelName} → archived now (was due ${r.archiveDate})`),
       ...skipped.map((r) => {
         const label =
           r.status === "no_event_end" ? "no end date — channel stays in Slack" :
           r.status === "no_ghl_record" ? "no GHL record found" :
-          r.status === "past_date" ? `end date already passed (${r.archiveDate}) — channel stays in Slack` :
+          r.status === "archived_now" ? `archived immediately (campaign ended ${r.archiveDate})` :
           r.status === "slack_channel_not_found" ? "Slack channel not found" :
           r.status === "invalid_date" ? "invalid event_end date format" :
           r.status === "error" ? "unexpected error" :
