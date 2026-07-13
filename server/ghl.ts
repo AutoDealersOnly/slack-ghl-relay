@@ -1063,3 +1063,159 @@ async function joinAndSetupChannel(channelId: string, channelName: string, produ
 
   console.log(`[create-channel] Setup complete for ${channelName} (${channelId})`);
 }
+
+// POST /slack/backfill-archive-jobs — schedule archive jobs for existing channels that were
+// created before the auto-archive feature existed.
+// Body: { channels: ["2607-airport-chrysler-1c", "2607-kia-south-atlanta-1c", ...] }
+// Or omit body / send {} to process all channels in canvas_log that have no archive job yet.
+ghlRouter.post("/backfill-archive-jobs", async (req: Request, res: Response) => {
+  res.status(200).send("ok");
+  try {
+    const payload = req.body as { channels?: string[] };
+    const channelList: string[] = payload.channels ?? [];
+
+    // If no list provided, pull all channels from canvas_log
+    let targets: Array<{ channelId: string; channelName: string }> = [];
+    if (channelList.length === 0) {
+      const { getDb: getDb2 } = await import("./db");
+      const db = await getDb2();
+      if (!db) {
+        console.error("[backfill-archive-jobs] DB not available");
+        return;
+      }
+      const { canvasLog: clTable } = await import("../drizzle/schema");
+      const rows = await db.select().from(clTable);
+      targets = rows.map((r) => ({ channelId: r.channelId, channelName: r.channelName }));
+    } else {
+      // Look up channelIds from canvas_log for the provided names
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) {
+        console.error("[backfill-archive-jobs] DB not available");
+        return;
+      }
+      const { canvasLog: clTable } = await import("../drizzle/schema");
+      const { inArray } = await import("drizzle-orm");
+      const rows = await db.select().from(clTable).where(inArray(clTable.channelName, channelList));
+      targets = rows.map((r) => ({ channelId: r.channelId, channelName: r.channelName }));
+      // For any channel names not in canvas_log, we still need to process them
+      // (they may not have a canvas yet — use a placeholder channelId of "unknown")
+      for (const name of channelList) {
+        if (!targets.find((t) => t.channelName === name)) {
+          targets.push({ channelId: "unknown", channelName: name });
+        }
+      }
+    }
+
+    console.log(`[backfill-archive-jobs] Processing ${targets.length} channel(s)`);
+
+    const results: Array<{ channelName: string; status: string; archiveDate?: string }> = [];
+
+    for (const target of targets) {
+      const { channelName, channelId } = target;
+      try {
+        // Fetch production record to get event_end
+        const record = await fetchProductionRecord(channelName);
+        if (!record) {
+          console.warn(`[backfill-archive-jobs] No GHL record found for ${channelName}`);
+          results.push({ channelName, status: "no_ghl_record" });
+          continue;
+        }
+        const eventEndDate = record.properties.event_end;
+        if (!eventEndDate) {
+          console.warn(`[backfill-archive-jobs] No event_end on GHL record for ${channelName}`);
+          results.push({ channelName, status: "no_event_end" });
+          continue;
+        }
+
+        // Parse and compute archive date
+        const endParts = eventEndDate.split("-").map(Number);
+        if (endParts.length !== 3 || isNaN(endParts[0]) || isNaN(endParts[1]) || isNaN(endParts[2])) {
+          console.warn(`[backfill-archive-jobs] Invalid event_end format for ${channelName}: ${eventEndDate}`);
+          results.push({ channelName, status: "invalid_date" });
+          continue;
+        }
+
+        const archiveDate = new Date(Date.UTC(endParts[0], endParts[1] - 1, endParts[2] + 3, 12, 0, 0));
+        const archiveDay = archiveDate.getUTCDate();
+        const archiveMonth = archiveDate.getUTCMonth() + 1;
+        const archiveYear = archiveDate.getUTCFullYear();
+
+        // If archive date is already in the past, skip scheduling but log it
+        if (archiveDate < new Date()) {
+          console.log(`[backfill-archive-jobs] Archive date ${archiveDate.toISOString()} is in the past for ${channelName} — skipping`);
+          results.push({ channelName, status: "past_date", archiveDate: archiveDate.toISOString() });
+          continue;
+        }
+
+        // Resolve channelId if we only have "unknown"
+        let resolvedChannelId = channelId;
+        if (resolvedChannelId === "unknown") {
+          // Try to look up from Slack
+          const listResp = await fetch(
+            `https://slack.com/api/conversations.list?limit=1000&exclude_archived=true`,
+            { headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}` } }
+          );
+          const listData = (await listResp.json()) as {
+            ok: boolean;
+            channels?: Array<{ id: string; name: string }>;
+          };
+          const found = listData.channels?.find((c) => c.name === channelName);
+          if (!found) {
+            console.warn(`[backfill-archive-jobs] Could not find Slack channel ${channelName}`);
+            results.push({ channelName, status: "slack_channel_not_found" });
+            continue;
+          }
+          resolvedChannelId = found.id;
+        }
+
+        // Insert DB record
+        await insertChannelArchiveJob(resolvedChannelId, channelName, archiveDate);
+
+        // Schedule heartbeat job
+        const cron = `0 0 12 ${archiveDay} ${archiveMonth} *`;
+        const jobResult = await createHeartbeatJob(
+          {
+            name: `archive-${resolvedChannelId}`,
+            cron,
+            path: "/api/scheduled/archive-channel",
+            method: "POST",
+            payload: { channel_id: resolvedChannelId },
+            description: `Auto-archive #${channelName} on ${archiveYear}-${String(archiveMonth).padStart(2, "0")}-${String(archiveDay).padStart(2, "0")} (3 days after campaign end)`,
+          },
+          ""
+        );
+        await updateChannelArchiveJobTaskUid(resolvedChannelId, jobResult.taskUid);
+
+        const archiveDateStr = `${archiveYear}-${String(archiveMonth).padStart(2, "0")}-${String(archiveDay).padStart(2, "0")}`;
+        console.log(`[backfill-archive-jobs] Scheduled ${channelName} for archive on ${archiveDateStr} (taskUid: ${jobResult.taskUid})`);
+        results.push({ channelName, status: "scheduled", archiveDate: archiveDateStr });
+      } catch (err) {
+        console.error(`[backfill-archive-jobs] Error processing ${channelName}:`, err);
+        results.push({ channelName, status: "error" });
+      }
+    }
+
+    // Post summary to Slack notification channel
+    const scheduled = results.filter((r) => r.status === "scheduled");
+    const skipped = results.filter((r) => r.status !== "scheduled");
+    const summaryLines = [
+      `*Archive job backfill complete* — ${scheduled.length} scheduled, ${skipped.length} skipped`,
+      ...scheduled.map((r) => `  ✅ #${r.channelName} → archive on ${r.archiveDate}`),
+      ...skipped.map((r) => `  ⚠️ #${r.channelName} → ${r.status}${r.archiveDate ? ` (${r.archiveDate})` : ""}`),
+    ];
+    await fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        channel: "C0ADXCMLS4W",
+        text: summaryLines.join("\n"),
+      }),
+    });
+  } catch (err) {
+    console.error("[backfill-archive-jobs] Error:", err);
+  }
+});
