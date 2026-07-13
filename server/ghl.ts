@@ -934,6 +934,16 @@ ghlRouter.post("/scheduled/archive-channel", async (req: Request, res: Response)
           headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
           body: JSON.stringify({ channel: job.channelId }),
         });
+        // Post a notice inside the channel before archiving
+        const archiveDateLabel = new Date(job.archiveAfter).toISOString().slice(0, 10);
+        await fetch("https://slack.com/api/chat.postMessage", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            channel: job.channelId,
+            text: `📂 This channel has been automatically archived by GHL. The campaign ended on ${archiveDateLabel} (archived 3 days after campaign end date).`,
+          }),
+        });
         const archiveResp = await fetch("https://slack.com/api/conversations.archive", {
           method: "POST",
           headers: {
@@ -1183,6 +1193,15 @@ ghlRouter.post("/backfill-archive-jobs", async (req: Request, res: Response) => 
             method: "POST",
             headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
             body: JSON.stringify({ channel: resolvedChannelId }),
+          });
+          // Post a notice inside the channel before archiving
+          await fetch("https://slack.com/api/chat.postMessage", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              channel: resolvedChannelId,
+              text: `📂 This channel has been automatically archived by GHL. The campaign ended on ${archiveDateStr} (archived 3 days after campaign end date).`,
+            }),
           });
           const archiveResp = await fetch("https://slack.com/api/conversations.archive", {
             method: "POST",
