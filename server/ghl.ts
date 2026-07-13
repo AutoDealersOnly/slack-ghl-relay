@@ -1202,7 +1202,17 @@ ghlRouter.post("/backfill-archive-jobs", async (req: Request, res: Response) => 
     const summaryLines = [
       `*Archive job backfill complete* — ${scheduled.length} scheduled, ${skipped.length} skipped`,
       ...scheduled.map((r) => `  ✅ #${r.channelName} → archive on ${r.archiveDate}`),
-      ...skipped.map((r) => `  ⚠️ #${r.channelName} → ${r.status}${r.archiveDate ? ` (${r.archiveDate})` : ""}`),
+      ...skipped.map((r) => {
+        const label =
+          r.status === "no_event_end" ? "no end date — channel stays in Slack" :
+          r.status === "no_ghl_record" ? "no GHL record found" :
+          r.status === "past_date" ? `end date already passed (${r.archiveDate}) — channel stays in Slack` :
+          r.status === "slack_channel_not_found" ? "Slack channel not found" :
+          r.status === "invalid_date" ? "invalid event_end date format" :
+          r.status === "error" ? "unexpected error" :
+          r.status;
+        return `  ⚠️ #${r.channelName} → ${label}`;
+      }),
     ];
     await fetch("https://slack.com/api/chat.postMessage", {
       method: "POST",
