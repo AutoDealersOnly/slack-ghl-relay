@@ -37,7 +37,7 @@ async function startServer() {
   // Capture raw body for Slack signature verification BEFORE json parsing
   // Skip for /slack/ghl which handles its own body parsing
   app.use("/slack", (req: Request, _res: Response, next: NextFunction) => {
-    if (req.path === "/ghl" || req.path === "/ghl-webhook" || req.path === "/proof-status" || req.path === "/dealership-sync" || req.path === "/push-campaign-values" || req.path === "/create-channel" || req.path === "/backfill-archive-jobs") {
+    if (req.path === "/ghl" || req.path === "/ghl-webhook" || req.path === "/proof-status" || req.path === "/dealership-sync" || req.path === "/push-campaign-values" || req.path === "/create-channel" || req.path === "/backfill-archive-jobs" || req.path === "/reschedule-archive") {
       return next();
     }
     const chunks: Buffer[] = [];

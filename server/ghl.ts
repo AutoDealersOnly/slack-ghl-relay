@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { upsertCanvasLog, getCanvasByChannelName, clearCanvasLog, insertChannelArchiveJob, updateChannelArchiveJobTaskUid, getPendingArchiveJobs, updateChannelArchiveJobStatus } from "./db";
+import { upsertCanvasLog, getCanvasByChannelName, clearCanvasLog, insertChannelArchiveJob, updateChannelArchiveJobTaskUid, getPendingArchiveJobs, updateChannelArchiveJobStatus, updateChannelArchiveJobDate } from "./db";
 import { createHeartbeatJob } from "./_core/heartbeat";
 
 export const GHL_API_KEY = process.env.GHL_API_KEY ?? "";
@@ -1001,17 +1001,20 @@ async function joinAndSetupChannel(channelId: string, channelName: string, produ
     { headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}` } }
   );
   const ugData = (await ugResp.json()) as { ok: boolean; users?: string[] };
-  if (ugData.ok && ugData.users && ugData.users.length > 0) {
-    await fetch("https://slack.com/api/conversations.invite", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ channel: channelId, users: ugData.users.join(",") }),
-    });
-    console.log(`[create-channel] Invited ${ugData.users.length} @deals members to ${channelName}`);
-  }
+  // Always invite David (U014TE8F60Z) and Brian Shaw (U01403J8J3H) plus @deals members
+  const alwaysInvite = ["U014TE8F60Z", "U01403J8J3H"];
+  const usersToInvite = ugData.ok && ugData.users && ugData.users.length > 0
+    ? Array.from(new Set([...alwaysInvite, ...ugData.users]))
+    : alwaysInvite;
+  await fetch("https://slack.com/api/conversations.invite", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ channel: channelId, users: usersToInvite.join(",") }),
+  });
+  console.log(`[create-channel] Invited ${usersToInvite.length} members to ${channelName} (including David & Brian Shaw)`);
 
   // Fetch production record and build canvas
   const record = await fetchProductionRecord(channelName);
@@ -1278,5 +1281,73 @@ ghlRouter.post("/backfill-archive-jobs", async (req: Request, res: Response) => 
     });
   } catch (err) {
     console.error("[backfill-archive-jobs] Error:", err);
+  }
+});
+
+// POST /slack/reschedule-archive — update the archive date for a channel when campaign end date changes in GHL
+// Body: { production_name: string }
+ghlRouter.post("/reschedule-archive", async (req: Request, res: Response) => {
+  res.status(200).send("ok");
+  const { production_name } = req.body as { production_name?: string };
+  if (!production_name) {
+    console.warn("[reschedule-archive] Missing production_name in request body");
+    return;
+  }
+  const channelName = production_name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+  console.log(`[reschedule-archive] Processing reschedule for channel: ${channelName}`);
+
+  try {
+    // Look up the production record to get the new event_end
+    const record = await fetchProductionRecord(channelName);
+    if (!record) {
+      console.warn(`[reschedule-archive] No production record found for ${channelName}`);
+      return;
+    }
+    const eventEnd = record.properties?.event_end as string | undefined;
+    if (!eventEnd) {
+      console.warn(`[reschedule-archive] No event_end found for ${channelName} — archive date unchanged`);
+      return;
+    }
+
+    // Parse event_end and compute new archive date (+3 days)
+    const endDate = new Date(eventEnd);
+    if (isNaN(endDate.getTime())) {
+      console.warn(`[reschedule-archive] Invalid event_end date "${eventEnd}" for ${channelName}`);
+      return;
+    }
+    const archiveDate = new Date(endDate);
+    archiveDate.setDate(archiveDate.getDate() + 3);
+    const archiveDateStr = archiveDate.toISOString().slice(0, 10);
+
+    // Resolve the Slack channel ID
+    const listResp = await fetch(
+      `https://slack.com/api/conversations.list?exclude_archived=true&limit=1000`,
+      { headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}` } }
+    );
+    const listData = (await listResp.json()) as {
+      ok: boolean;
+      channels?: Array<{ id: string; name: string }>;
+    };
+    const found = listData.channels?.find((c) => c.name === channelName);
+    if (!found) {
+      console.warn(`[reschedule-archive] Slack channel ${channelName} not found`);
+      return;
+    }
+
+    // Update the DB record
+    await updateChannelArchiveJobDate(found.id, archiveDate);
+    console.log(`[reschedule-archive] Updated archive date for ${channelName} to ${archiveDateStr}`);
+
+    // Notify #ghl-new-subaccounts
+    await fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channel: "C0ADXCMLS4W",
+        text: `📅 Archive date updated for *#${channelName}* → new archive date: *${archiveDateStr}* (3 days after updated campaign end date).`,
+      }),
+    });
+  } catch (err) {
+    console.error(`[reschedule-archive] Unexpected error for ${channelName}:`, err);
   }
 });

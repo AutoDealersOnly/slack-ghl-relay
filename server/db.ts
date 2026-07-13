@@ -185,6 +185,26 @@ export async function getPendingArchiveJobs() {
 }
 
 /**
+ * Update the archiveAfter date on a pending channel archive job.
+ */
+export async function updateChannelArchiveJobDate(
+  channelId: string,
+  newArchiveAfter: Date
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(channelArchiveJobs)
+    .set({ archiveAfter: newArchiveAfter })
+    .where(
+      and(
+        eq(channelArchiveJobs.channelId, channelId),
+        eq(channelArchiveJobs.status, "pending")
+      )
+    );
+}
+
+/**
  * Update the status of a channel archive job.
  */
 export async function updateChannelArchiveJobStatus(
