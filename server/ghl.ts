@@ -1387,3 +1387,87 @@ ghlRouter.post("/scheduled/warn-channel-archive", async (req: Request, res: Resp
     console.error(`[warn-channel-archive] Error posting warning in #${channel_name}:`, err);
   }
 });
+
+// POST /slack/backfill-warning-jobs — schedule archive warning heartbeat jobs for channels that
+// already have an archive job but no warning job yet. Only schedules warnings whose date is in the future.
+// Body: {} (processes all pending archive jobs in the DB)
+ghlRouter.post("/backfill-warning-jobs", async (req: Request, res: Response) => {
+  res.status(200).send("ok");
+  try {
+    const { getDb: getDb3 } = await import("./db");
+    const db = await getDb3();
+    if (!db) {
+      console.error("[backfill-warning-jobs] DB not available");
+      return;
+    }
+    const { channelArchiveJobs: cajTable } = await import("../drizzle/schema");
+    const { eq: eq3 } = await import("drizzle-orm");
+
+    // Get all pending archive jobs
+    const jobs = await db
+      .select()
+      .from(cajTable)
+      .where(eq3(cajTable.status, "pending"));
+
+    const now = new Date();
+    const results: Array<{ channelName: string; status: string; warningDate?: string }> = [];
+
+    for (const job of jobs) {
+      const archiveDate = new Date(job.archiveAfter);
+      const warningDate = new Date(archiveDate);
+      warningDate.setUTCDate(warningDate.getUTCDate() - 1);
+
+      if (warningDate <= now) {
+        // Warning date already passed — skip, no message sent to active channels
+        console.log(`[backfill-warning-jobs] Warning date for #${job.channelName} already passed (${warningDate.toISOString().slice(0,10)}) — skipping`);
+        results.push({ channelName: job.channelName, status: "past_date" });
+        continue;
+      }
+
+      const warnDay = warningDate.getUTCDate();
+      const warnMonth = warningDate.getUTCMonth() + 1;
+      const warnCron = `0 0 12 ${warnDay} ${warnMonth} *`;
+      const archiveDateStr = archiveDate.toISOString().slice(0, 10);
+      const warningDateStr = warningDate.toISOString().slice(0, 10);
+
+      try {
+        await createHeartbeatJob(
+          {
+            name: `archive-warn-${job.channelId}`,
+            cron: warnCron,
+            path: "/api/scheduled/warn-channel-archive",
+            method: "POST",
+            payload: { channel_id: job.channelId, channel_name: job.channelName, archive_date: archiveDateStr },
+            description: `Warn #${job.channelName} of upcoming archive on ${archiveDateStr}`,
+          },
+          ""
+        );
+        console.log(`[backfill-warning-jobs] Scheduled warning for #${job.channelName} on ${warningDateStr}`);
+        results.push({ channelName: job.channelName, status: "scheduled", warningDate: warningDateStr });
+      } catch (jobErr) {
+        console.error(`[backfill-warning-jobs] Failed to schedule warning for #${job.channelName}:`, jobErr);
+        results.push({ channelName: job.channelName, status: "error" });
+      }
+    }
+
+    // Post summary to #ghl-new-subaccounts
+    const scheduled = results.filter((r) => r.status === "scheduled");
+    const skipped = results.filter((r) => r.status === "past_date");
+    const errors = results.filter((r) => r.status === "error");
+
+    const lines = [
+      `*Archive warning job backfill complete* — ${scheduled.length} scheduled, ${skipped.length} skipped (past date), ${errors.length} errors`,
+      ...scheduled.map((r) => `✅ *#${r.channelName}* → warning on ${r.warningDate}`),
+      ...skipped.map((r) => `⏭️ *#${r.channelName}* → warning date already passed, skipped`),
+      ...errors.map((r) => `❌ *#${r.channelName}* → error scheduling warning`),
+    ];
+
+    await fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ channel: "C0ADXCMLS4W", text: lines.join("\n") }),
+    });
+  } catch (err) {
+    console.error("[backfill-warning-jobs] Unexpected error:", err);
+  }
+});
