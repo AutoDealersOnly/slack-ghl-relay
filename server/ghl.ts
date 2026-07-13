@@ -934,16 +934,6 @@ ghlRouter.post("/scheduled/archive-channel", async (req: Request, res: Response)
           headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
           body: JSON.stringify({ channel: job.channelId }),
         });
-        // Post a notice inside the channel before archiving
-        const archiveDateLabel = new Date(job.archiveAfter).toISOString().slice(0, 10);
-        await fetch("https://slack.com/api/chat.postMessage", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            channel: job.channelId,
-            text: `📂 This channel has been automatically archived by GHL. The campaign ended on ${archiveDateLabel} (archived 3 days after campaign end date).`,
-          }),
-        });
         const archiveResp = await fetch("https://slack.com/api/conversations.archive", {
           method: "POST",
           headers: {
@@ -1077,6 +1067,26 @@ async function joinAndSetupChannel(channelId: string, channelName: string, produ
         );
         await updateChannelArchiveJobTaskUid(channelId, jobResult.taskUid);
         console.log(`[create-channel] Scheduled archive for ${channelName} on ${archiveDate.toISOString()} (taskUid: ${jobResult.taskUid})`);
+
+        // Schedule a warning message the day BEFORE archiving (at noon UTC)
+        const warningDate = new Date(archiveDate);
+        warningDate.setUTCDate(warningDate.getUTCDate() - 1);
+        const warnDay = warningDate.getUTCDate();
+        const warnMonth = warningDate.getUTCMonth() + 1;
+        const warnCron = `0 0 12 ${warnDay} ${warnMonth} *`;
+        const archiveDateStr = `${archiveYear}-${String(archiveMonth).padStart(2,'0')}-${String(archiveDay).padStart(2,'0')}`;
+        await createHeartbeatJob(
+          {
+            name: `archive-warn-${channelId}`,
+            cron: warnCron,
+            path: "/api/scheduled/warn-channel-archive",
+            method: "POST",
+            payload: { channel_id: channelId, channel_name: channelName, archive_date: archiveDateStr },
+            description: `Warn #${channelName} of upcoming archive on ${archiveDateStr}`,
+          },
+          ""
+        );
+        console.log(`[create-channel] Scheduled archive warning for ${channelName} on ${warningDate.toISOString().slice(0,10)}`);
       } else {
         console.warn(`[create-channel] Invalid event_end date format: ${eventEndDate} — skipping archive scheduling`);
       }
@@ -1196,15 +1206,6 @@ ghlRouter.post("/backfill-archive-jobs", async (req: Request, res: Response) => 
             method: "POST",
             headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
             body: JSON.stringify({ channel: resolvedChannelId }),
-          });
-          // Post a notice inside the channel before archiving
-          await fetch("https://slack.com/api/chat.postMessage", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              channel: resolvedChannelId,
-              text: `📂 This channel has been automatically archived by GHL. The campaign ended on ${archiveDateStr} (archived 3 days after campaign end date).`,
-            }),
           });
           const archiveResp = await fetch("https://slack.com/api/conversations.archive", {
             method: "POST",
@@ -1349,5 +1350,40 @@ ghlRouter.post("/reschedule-archive", async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error(`[reschedule-archive] Unexpected error for ${channelName}:`, err);
+  }
+});
+
+// POST /api/scheduled/warn-channel-archive — heartbeat callback fired the day before a channel is archived
+// Posts a warning message inside the channel so members know it will be archived tomorrow
+ghlRouter.post("/scheduled/warn-channel-archive", async (req: Request, res: Response) => {
+  res.status(200).send("ok");
+  const { channel_id, channel_name, archive_date } = req.body as {
+    channel_id?: string;
+    channel_name?: string;
+    archive_date?: string;
+  };
+  if (!channel_id || !channel_name) {
+    console.warn("[warn-channel-archive] Missing channel_id or channel_name in payload");
+    return;
+  }
+  try {
+    // Join the channel first so the bot can post
+    await fetch("https://slack.com/api/conversations.join", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ channel: channel_id }),
+    });
+    // Post the warning message inside the channel
+    await fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channel: channel_id,
+        text: `⚠️ *Heads up!* This channel will be automatically archived by GHL tomorrow (${archive_date ?? "tomorrow"}). The campaign has ended. If you need to keep this channel open, please contact an admin.`,
+      }),
+    });
+    console.log(`[warn-channel-archive] Posted archive warning in #${channel_name} (archiving on ${archive_date})`);
+  } catch (err) {
+    console.error(`[warn-channel-archive] Error posting warning in #${channel_name}:`, err);
   }
 });
