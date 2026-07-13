@@ -2,9 +2,14 @@ import { Router, Request, Response } from "express";
 import { upsertCanvasLog, getCanvasByChannelName, clearCanvasLog, insertChannelArchiveJob, updateChannelArchiveJobTaskUid, getPendingArchiveJobs, updateChannelArchiveJobStatus } from "./db";
 import { createHeartbeatJob } from "./_core/heartbeat";
 
-export const GHL_API_KEY = "pit-4ceff49d-22c5-42df-bc34-8fb8a6a29fe2";
-export const GHL_LOCATION_ID = "UGJmliC4GETAgeO6IDXa";
-export const SLACK_BOT_TOKEN = "xoxb-414532258742-11486505580721-34wVikPoiBR6MR8ZIRLb8hOr";
+export const GHL_API_KEY = process.env.GHL_API_KEY ?? "";
+export const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID ?? "";
+export const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN ?? "";
+
+// Warn at startup if secrets are missing
+if (!GHL_API_KEY || !GHL_LOCATION_ID || !SLACK_BOT_TOKEN) {
+  console.warn("[ghl] WARNING: One or more required secrets are missing from environment variables (GHL_API_KEY, GHL_LOCATION_ID, SLACK_BOT_TOKEN). Endpoints will not function correctly.");
+}
 
 interface DealershipProperties {
   dealership_name?: string;
