@@ -45,3 +45,26 @@ export const canvasLog = mysqlTable("canvas_log", {
 
 export type CanvasLog = typeof canvasLog.$inferSelect;
 export type InsertCanvasLog = typeof canvasLog.$inferInsert;
+
+/**
+ * Tracks scheduled channel archive jobs.
+ * Created when a Slack channel is auto-created; heartbeat fires at archiveAfter date.
+ */
+export const channelArchiveJobs = mysqlTable("channel_archive_jobs", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Slack channel ID (e.g. C0BDSFS7LK1) */
+  channelId: varchar("channelId", { length: 32 }).notNull(),
+  /** Slack channel name (e.g. 2607-westshore-honda-ame) */
+  channelName: varchar("channelName", { length: 128 }).notNull(),
+  /** When to archive the channel (campaign_end_date + 3 days), UTC */
+  archiveAfter: timestamp("archiveAfter").notNull(),
+  /** Heartbeat job UID returned by createHeartbeatJob() */
+  taskUid: varchar("taskUid", { length: 64 }),
+  /** Job status */
+  status: mysqlEnum("status", ["pending", "archived", "failed"]).default("pending").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ChannelArchiveJob = typeof channelArchiveJobs.$inferSelect;
+export type InsertChannelArchiveJob = typeof channelArchiveJobs.$inferInsert;

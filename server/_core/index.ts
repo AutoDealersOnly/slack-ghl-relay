@@ -37,7 +37,7 @@ async function startServer() {
   // Capture raw body for Slack signature verification BEFORE json parsing
   // Skip for /slack/ghl which handles its own body parsing
   app.use("/slack", (req: Request, _res: Response, next: NextFunction) => {
-    if (req.path === "/ghl" || req.path === "/ghl-webhook" || req.path === "/proof-status" || req.path === "/dealership-sync") {
+    if (req.path === "/ghl" || req.path === "/ghl-webhook" || req.path === "/proof-status" || req.path === "/dealership-sync" || req.path === "/push-campaign-values" || req.path === "/create-channel") {
       return next();
     }
     const chunks: Buffer[] = [];
@@ -57,8 +57,10 @@ async function startServer() {
 
   // Slack event relay
   app.use("/slack", slackRouter);
-  // GHL slash command handler
+  // GHL slash command handler (mounted at /slack)
   app.use("/slack", ghlRouter);
+  // GHL scheduled callbacks (heartbeat requires /api/scheduled/ prefix at root)
+  app.use("/api", ghlRouter);
 
   // Health / root route
   app.get("/", (_req: Request, res: Response) => {

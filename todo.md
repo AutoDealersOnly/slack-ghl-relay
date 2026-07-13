@@ -12,3 +12,8 @@
 - [x] Build /slack/ghl-webhook endpoint for GHL workflow auto-update trigger
 - [x] Set up GHL Production workflow to call /slack/ghl-webhook on record update
 - [x] Switch canvas update to in-place edit (canvases.edit) to eliminate ghost Deleted file tabs
+- [x] Add /slack/push-campaign-values endpoint — push campaign dates, ask_for, event_coordinator, kbb_ed to subaccount custom values when Production status → "production"
+- [x] Add /slack/create-channel endpoint — auto-create Slack channel + canvas when Production status → "production"
+- [x] Add channel_archive_jobs DB table to store channelId, channelName, archiveAfter date, taskUid
+- [x] Add /api/scheduled/archive-channel endpoint — archives channel when called by heartbeat job
+- [x] Schedule heartbeat job per channel to fire 3 days after campaign end date

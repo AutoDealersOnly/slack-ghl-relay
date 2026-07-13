@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { and, eq, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { canvasLog, InsertUser, users } from "../drizzle/schema";
+import { canvasLog, channelArchiveJobs, InsertUser, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -133,4 +133,68 @@ export async function clearCanvasLog(channelId: string): Promise<void> {
   const db = await getDb();
   if (!db) return;
   await db.delete(canvasLog).where(eq(canvasLog.channelId, channelId));
+}
+
+/**
+ * Insert a new channel archive job.
+ */
+export async function insertChannelArchiveJob(
+  channelId: string,
+  channelName: string,
+  archiveAfter: Date,
+  taskUid?: string
+): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot insert channel archive job: database not available");
+    return;
+  }
+  await db.insert(channelArchiveJobs).values({ channelId, channelName, archiveAfter, taskUid, status: "pending" });
+}
+
+/**
+ * Update the taskUid on a channel archive job after the heartbeat job is created.
+ */
+export async function updateChannelArchiveJobTaskUid(
+  channelId: string,
+  taskUid: string
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(channelArchiveJobs)
+    .set({ taskUid })
+    .where(eq(channelArchiveJobs.channelId, channelId));
+}
+
+/**
+ * Get all pending archive jobs where archiveAfter <= now.
+ */
+export async function getPendingArchiveJobs() {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(channelArchiveJobs)
+    .where(
+      and(
+        eq(channelArchiveJobs.status, "pending"),
+        lte(channelArchiveJobs.archiveAfter, new Date())
+      )
+    );
+}
+
+/**
+ * Update the status of a channel archive job.
+ */
+export async function updateChannelArchiveJobStatus(
+  id: number,
+  status: "archived" | "failed"
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(channelArchiveJobs)
+    .set({ status })
+    .where(eq(channelArchiveJobs.id, id));
 }

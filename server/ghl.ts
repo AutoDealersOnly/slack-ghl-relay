@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
-import { upsertCanvasLog, getCanvasByChannelName, clearCanvasLog } from "./db";
+import { upsertCanvasLog, getCanvasByChannelName, clearCanvasLog, insertChannelArchiveJob, updateChannelArchiveJobTaskUid, getPendingArchiveJobs, updateChannelArchiveJobStatus } from "./db";
+import { createHeartbeatJob } from "./_core/heartbeat";
 
 export const GHL_API_KEY = "pit-4ceff49d-22c5-42df-bc34-8fb8a6a29fe2";
 export const GHL_LOCATION_ID = "UGJmliC4GETAgeO6IDXa";
@@ -658,3 +659,407 @@ ghlRouter.post("/ghl-webhook", async (req: Request, res: Response) => {
     console.error("[ghl-webhook] Error:", err);
   }
 });
+
+// Helper: format a date string (YYYY-MM-DD) as "Month D" e.g. "July 16"
+function fmtMonthDay(s?: string): string {
+  if (!s) return "";
+  const parts = s.split("-");
+  if (parts.length !== 3) return s;
+  const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const month = months[parseInt(parts[1]) - 1] ?? "";
+  const day = parseInt(parts[2]);
+  return `${month} ${day}`;
+}
+
+// Helper: format date range as "Month D-D" e.g. "July 16-20"
+function fmtCampaignDates(start?: string, end?: string): string {
+  if (!start) return "";
+  const startFmt = fmtMonthDay(start);
+  if (!end) return startFmt;
+  const endDay = parseInt((end.split("-")[2] ?? "0"));
+  return `${startFmt}-${endDay}`;
+}
+
+// Helper: build ask_for / event_coordinator from closer + greeter (non-empty only)
+function fmtTeamNames(closer?: string, greeter?: string): string {
+  return [closer, greeter].filter(Boolean).join(", ");
+}
+
+// POST /slack/push-campaign-values — push campaign custom values to subaccount
+// Triggered by GHL workflow when Production status → "production"
+ghlRouter.post("/push-campaign-values", async (req: Request, res: Response) => {
+  res.status(200).send("ok");
+
+  try {
+    const payload = req.body as Record<string, string>;
+    console.log("[push-campaign-values] Received payload:", JSON.stringify(payload));
+
+    // Derive production name
+    const productionName = payload.production_name;
+    if (!productionName) {
+      console.warn("[push-campaign-values] No production_name in payload — skipping");
+      return;
+    }
+
+    const channelName = productionName.toLowerCase().replace(/\s+/g, "-");
+
+    // Fetch fresh production record from GHL ADO account
+    const record = await fetchProductionRecord(channelName);
+    if (!record) {
+      console.warn(`[push-campaign-values] No production record found for ${channelName}`);
+      return;
+    }
+
+    const p = record.properties;
+
+    // Get linked dealership to retrieve subaccount api_key and loc_id
+    const dealershipRelation = record.relations?.find(
+      (r) => r.objectKey === "custom_objects.dealerships"
+    );
+    if (!dealershipRelation) {
+      console.warn(`[push-campaign-values] No dealership relation on production record ${channelName}`);
+      return;
+    }
+
+    const d = await fetchDealership(dealershipRelation.recordId);
+    if (!d) {
+      console.warn(`[push-campaign-values] Could not fetch dealership for ${channelName}`);
+      return;
+    }
+
+    const locId = d.loc_id?.trim();
+    const subApiKey = (d as any).api_key?.trim();
+
+    if (!locId || !subApiKey) {
+      console.warn(`[push-campaign-values] Missing loc_id or api_key for dealership linked to ${channelName}`);
+      return;
+    }
+
+    // Build campaign custom value updates
+    const startDate = p.event_start;
+    const endDate = p.event_end;
+    const closer = p.closer ?? "";
+    const greeter = p.greeter ?? "";
+
+    const campaignDates = fmtCampaignDates(startDate, endDate);
+    const campaignStartDate = fmtMonthDay(startDate);
+    const campaignEndDate = fmtMonthDay(endDate);
+    const kbbEd = startDate ? fmtMonthDay(startDate).split(" ")[0] ?? "" : ""; // just the month
+    const teamNames = fmtTeamNames(closer, greeter);
+
+    const customValueUpdates: Record<string, string> = {
+      campaign_dates: campaignDates,
+      campaign_start_date: campaignStartDate,
+      campaign_end_date: campaignEndDate,
+      kbb_ed: kbbEd,
+      ask_for: teamNames,
+      event_coodinator: teamNames, // note: GHL field key has typo "coodinator"
+    };
+
+    // Fetch existing custom values for the subaccount
+    const cvResp = await fetch(
+      `https://services.leadconnectorhq.com/locations/${locId}/customValues`,
+      {
+        headers: {
+          Authorization: `Bearer ${subApiKey}`,
+          Version: "2021-07-28",
+        },
+      }
+    );
+    if (!cvResp.ok) {
+      const errText = await cvResp.text().catch(() => "");
+      console.error(`[push-campaign-values] GHL customValues fetch failed (${cvResp.status}) for loc ${locId}: ${errText}`);
+      return;
+    }
+    const cvData = (await cvResp.json()) as {
+      customValues?: Array<{ id: string; name: string; fieldKey: string; value: string }>;
+    };
+    const existingValues = cvData.customValues ?? [];
+
+    let updated = 0;
+    let skipped = 0;
+    for (const [key, value] of Object.entries(customValueUpdates)) {
+      if (!value) { skipped++; continue; }
+      const normalizedKey = `custom_values.${key}`;
+      const existing = existingValues.find((cv) => {
+        const normalized = cv.fieldKey.replace(/\{\{\s*/g, "").replace(/\s*\}\}/g, "").trim();
+        return normalized === normalizedKey;
+      });
+      if (!existing) {
+        console.warn(`[push-campaign-values] No custom value found for key custom_values.${key} in loc ${locId}`);
+        skipped++;
+        continue;
+      }
+      const updateResp = await fetch(
+        `https://services.leadconnectorhq.com/locations/${locId}/customValues/${existing.id}`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${subApiKey}`,
+            Version: "2021-07-28",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ name: existing.name, value }),
+        }
+      );
+      const updateData = (await updateResp.json()) as { customValue?: { id: string } };
+      if (updateData.customValue?.id) {
+        updated++;
+      } else {
+        console.warn(`[push-campaign-values] Failed to update custom_values.${key}:`, JSON.stringify(updateData));
+        skipped++;
+      }
+    }
+
+    console.log(`[push-campaign-values] Done for ${productionName} (loc ${locId}): ${updated} updated, ${skipped} skipped`);
+
+    // Post confirmation to Slack notification channel
+    const notifyChannelId = "C0ADXCMLS4W";
+    await fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        channel: notifyChannelId,
+        text: `Campaign custom values updated in *${d.dealership_name ?? productionName}* subaccount. Campaign: *${campaignDates}* | Team: *${teamNames || "—"}* <@U014TE8F60Z>`,
+      }),
+    });
+  } catch (err) {
+    console.error("[push-campaign-values] Error:", err);
+  }
+});
+
+// POST /slack/create-channel — auto-create Slack channel when Production status → "production"
+// GHL workflow sends: production_name
+ghlRouter.post("/create-channel", async (req: Request, res: Response) => {
+  res.status(200).send("ok");
+
+  try {
+    const payload = req.body as Record<string, string>;
+    console.log("[create-channel] Received payload:", JSON.stringify(payload));
+
+    const productionName = payload.production_name;
+    if (!productionName) {
+      console.warn("[create-channel] No production_name in payload — skipping");
+      return;
+    }
+
+    const channelName = productionName.toLowerCase().replace(/\s+/g, "-");
+
+    // Check if channel already exists in our DB (avoid duplicates)
+    const existingCanvasId = await getCanvasByChannelName(channelName);
+    if (existingCanvasId) {
+      console.log(`[create-channel] Channel ${channelName} already exists in DB — skipping creation`);
+      return;
+    }
+
+    // Create the Slack channel
+    const createResp = await fetch("https://slack.com/api/conversations.create", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name: channelName, is_private: false }),
+    });
+    const createData = (await createResp.json()) as {
+      ok: boolean;
+      error?: string;
+      channel?: { id: string; name: string };
+    };
+
+    // Fetch production record to get event_end for archive scheduling
+    const prodRecord = await fetchProductionRecord(channelName);
+    const eventEndDate = prodRecord?.properties?.event_end;
+
+    if (!createData.ok) {
+      // Channel may already exist in Slack but not in our DB
+      if (createData.error === "name_taken") {
+        console.warn(`[create-channel] Channel ${channelName} already exists in Slack — will try to find it`);
+        // Look up the existing channel
+        const listResp = await fetch(
+          `https://slack.com/api/conversations.list?limit=1000&exclude_archived=true`,
+          { headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}` } }
+        );
+        const listData = (await listResp.json()) as {
+          ok: boolean;
+          channels?: Array<{ id: string; name: string }>;
+        };
+        const existing = listData.channels?.find((c) => c.name === channelName);
+        if (!existing) {
+          console.error(`[create-channel] Could not find existing channel ${channelName}`);
+          return;
+        }
+        // Fall through with existing channel ID
+        const channelId = existing.id;
+        await joinAndSetupChannel(channelId, channelName, productionName, eventEndDate);
+        return;
+      }
+      console.error(`[create-channel] Failed to create channel ${channelName}: ${createData.error}`);
+      return;
+    }
+
+    const channelId = createData.channel!.id;
+    console.log(`[create-channel] Created channel ${channelName} (${channelId})`);
+
+    await joinAndSetupChannel(channelId, channelName, productionName, eventEndDate);
+  } catch (err) {
+    console.error("[create-channel] Error:", err);
+  }
+});
+
+// POST /api/scheduled/archive-channel — heartbeat callback to archive channels past their archiveAfter date
+// Mounted at /api in index.ts, so path here is /scheduled/archive-channel
+ghlRouter.post("/scheduled/archive-channel", async (req: Request, res: Response) => {
+  res.status(200).send("ok");
+  try {
+    const jobs = await getPendingArchiveJobs();
+    if (jobs.length === 0) {
+      console.log("[archive-channel] No pending archive jobs due");
+      return;
+    }
+    console.log(`[archive-channel] Processing ${jobs.length} pending archive job(s)`);
+    for (const job of jobs) {
+      try {
+        const archiveResp = await fetch("https://slack.com/api/conversations.archive", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ channel: job.channelId }),
+        });
+        const archiveData = (await archiveResp.json()) as { ok: boolean; error?: string };
+        if (archiveData.ok) {
+          await updateChannelArchiveJobStatus(job.id, "archived");
+          console.log(`[archive-channel] Archived channel ${job.channelName} (${job.channelId})`);
+          // Notify Slack
+          await fetch("https://slack.com/api/chat.postMessage", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              channel: "C0ADXCMLS4W",
+              text: `🗄️ Channel *#${job.channelName}* has been auto-archived (3 days after campaign end date).`,
+            }),
+          });
+        } else {
+          console.error(`[archive-channel] Failed to archive ${job.channelName}: ${archiveData.error}`);
+          await updateChannelArchiveJobStatus(job.id, "failed");
+        }
+      } catch (jobErr) {
+        console.error(`[archive-channel] Error processing job ${job.id}:`, jobErr);
+        await updateChannelArchiveJobStatus(job.id, "failed");
+      }
+    }
+  } catch (err) {
+    console.error("[archive-channel] Error:", err);
+  }
+});
+
+// Helper: join channel, invite @deals group, create canvas, post welcome message
+async function joinAndSetupChannel(channelId: string, channelName: string, productionName: string, eventEndDate?: string): Promise<void> {
+  // Bot joins the channel
+  await fetch("https://slack.com/api/conversations.join", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ channel: channelId }),
+  });
+
+  // Invite the @deals usergroup members
+  // First get the usergroup members
+  const ugResp = await fetch(
+    "https://slack.com/api/usergroups.users.list?usergroup=S014MV4QKLN",
+    { headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}` } }
+  );
+  const ugData = (await ugResp.json()) as { ok: boolean; users?: string[] };
+  if (ugData.ok && ugData.users && ugData.users.length > 0) {
+    await fetch("https://slack.com/api/conversations.invite", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ channel: channelId, users: ugData.users.join(",") }),
+    });
+    console.log(`[create-channel] Invited ${ugData.users.length} @deals members to ${channelName}`);
+  }
+
+  // Fetch production record and build canvas
+  const record = await fetchProductionRecord(channelName);
+  let markdown: string;
+  if (!record) {
+    markdown = `# GHL Production Details\n\n> No production record found for channel \`${channelName}\`.\n\n*Generated automatically*`;
+  } else {
+    const p = record.properties;
+    const dealershipRelation = record.relations?.find(
+      (r) => r.objectKey === "custom_objects.dealerships"
+    );
+    const d: DealershipProperties = dealershipRelation
+      ? (await fetchDealership(dealershipRelation.recordId)) ?? {}
+      : {};
+    markdown = buildCanvasMarkdown(p, d, channelName);
+  }
+
+  // Create the canvas
+  await createOrReplaceCanvas(channelId, channelName, markdown, null);
+
+  // Post welcome message
+  await fetch("https://slack.com/api/chat.postMessage", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      channel: channelId,
+      text: `📋 Channel created for *${productionName}*. Production canvas has been generated above.`,
+    }),
+  });
+
+  // Schedule auto-archive: 3 days after campaign end date
+  if (eventEndDate) {
+    try {
+      // Parse YYYY-MM-DD using Date.UTC to avoid timezone issues
+      const endParts = eventEndDate.split("-").map(Number);
+      if (endParts.length === 3 && !isNaN(endParts[0]) && !isNaN(endParts[1]) && !isNaN(endParts[2])) {
+        // Use Date object arithmetic so month-end rollover is handled automatically
+        const archiveDate = new Date(Date.UTC(endParts[0], endParts[1] - 1, endParts[2] + 3, 12, 0, 0));
+        const archiveDay = archiveDate.getUTCDate();
+        const archiveMonth = archiveDate.getUTCMonth() + 1; // 1-indexed
+        const archiveYear = archiveDate.getUTCFullYear();
+        // Insert DB record first (before creating heartbeat job)
+        await insertChannelArchiveJob(channelId, channelName, archiveDate);
+        // Build cron: fire at noon UTC on the exact archive date
+        // Format: "0 sec min hour dom mon dow" — 6-field with seconds
+        const cron = `0 0 12 ${archiveDay} ${archiveMonth} *`;
+        const jobResult = await createHeartbeatJob(
+          {
+            name: `archive-${channelId}`,
+            cron,
+            path: "/api/scheduled/archive-channel",
+            method: "POST",
+            payload: { channel_id: channelId },
+            description: `Auto-archive #${channelName} on ${archiveYear}-${String(archiveMonth).padStart(2,'0')}-${String(archiveDay).padStart(2,'0')} (3 days after campaign end)`,
+          },
+          "" // empty string = owner identity
+        );
+        await updateChannelArchiveJobTaskUid(channelId, jobResult.taskUid);
+        console.log(`[create-channel] Scheduled archive for ${channelName} on ${archiveDate.toISOString()} (taskUid: ${jobResult.taskUid})`);
+      } else {
+        console.warn(`[create-channel] Invalid event_end date format: ${eventEndDate} — skipping archive scheduling`);
+      }
+    } catch (archiveErr) {
+      console.error(`[create-channel] Failed to schedule archive for ${channelName}:`, archiveErr);
+    }
+  }
+
+  console.log(`[create-channel] Setup complete for ${channelName} (${channelId})`);
+}
