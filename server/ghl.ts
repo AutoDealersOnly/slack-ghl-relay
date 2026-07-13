@@ -928,6 +928,12 @@ ghlRouter.post("/scheduled/archive-channel", async (req: Request, res: Response)
     console.log(`[archive-channel] Processing ${jobs.length} pending archive job(s)`);
     for (const job of jobs) {
       try {
+        // Join the channel first — bot must be a member to archive it
+        await fetch("https://slack.com/api/conversations.join", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ channel: job.channelId }),
+        });
         const archiveResp = await fetch("https://slack.com/api/conversations.archive", {
           method: "POST",
           headers: {
@@ -937,7 +943,7 @@ ghlRouter.post("/scheduled/archive-channel", async (req: Request, res: Response)
           body: JSON.stringify({ channel: job.channelId }),
         });
         const archiveData = (await archiveResp.json()) as { ok: boolean; error?: string };
-        if (archiveData.ok) {
+        if (archiveData.ok || archiveData.error === "already_archived") {
           await updateChannelArchiveJobStatus(job.id, "archived");
           console.log(`[archive-channel] Archived channel ${job.channelName} (${job.channelId})`);
           // Notify Slack
@@ -1172,6 +1178,12 @@ ghlRouter.post("/backfill-archive-jobs", async (req: Request, res: Response) => 
         // If archive date is already in the past, archive the channel immediately
         if (archiveDate < new Date()) {
           console.log(`[backfill-archive-jobs] Archive date ${archiveDateStr} is in the past for ${channelName} — archiving now`);
+          // Join the channel first (bot must be a member to archive it)
+          await fetch("https://slack.com/api/conversations.join", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ channel: resolvedChannelId }),
+          });
           const archiveResp = await fetch("https://slack.com/api/conversations.archive", {
             method: "POST",
             headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
