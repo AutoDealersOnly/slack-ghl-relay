@@ -40,7 +40,8 @@ async function startServer() {
     if (req.path === "/ghl" || req.path === "/ghl-webhook" || req.path === "/proof-status" || req.path === "/dealership-sync" || req.path === "/push-campaign-values" || req.path === "/create-channel" || req.path === "/backfill-archive-jobs" || req.path === "/reschedule-archive" ||
       req.path === "/backfill-warning-jobs" ||
       req.path === "/cancel-archive" ||
-      req.path === "/refresh-archive-canvas") {
+      req.path === "/refresh-archive-canvas" ||
+      req.path === "/create-howto-canvas") {
       return next();
     }
     const chunks: Buffer[] = [];

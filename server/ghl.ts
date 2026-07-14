@@ -1668,3 +1668,229 @@ ghlRouter.post("/refresh-archive-canvas", async (req: Request, res: Response) =>
   res.status(200).send("ok");
   await refreshArchiveCanvas();
 });
+
+// POST /slack/create-howto-canvas — create or update the "How To" canvas on #ghl-new-subaccounts
+// Body: {} (idempotent — safe to call multiple times, will update in place)
+ghlRouter.post("/create-howto-canvas", async (req: Request, res: Response) => {
+  res.status(200).send("ok");
+  try {
+    const HOWTO_CANVAS_KEY = "HOWTO_CANVAS";
+
+    const markdown = `# 📖 How To — Slack & GHL Automations
+
+This canvas explains every automation we have set up between Slack and GHL (GoHighLevel). Read this if something isn't working, if you're new to the team, or if you just want to understand how it all fits together.
+
+---
+
+## 1. Create Slack Channel (Automatic)
+
+**What it does:**
+When a Production record in GHL has its Deal Stage changed to **"Production"**, a new Slack channel is automatically created for that campaign. You do not need to do anything manually.
+
+**What gets created automatically:**
+- A new Slack channel named after the production record (e.g. \`#2607-westshore-honda-ame\`)
+- A Production Canvas inside the channel with all the campaign details pulled from GHL
+- The **@deals** user group is invited to the channel
+- **David** and **Brian Shaw** are added to the channel automatically
+
+**What triggers it:**
+A GHL workflow called **"Create Slack Channel"** watches for any Production record where the Deal Stage changes to "Production" and sends the production name to our relay app.
+
+**What to do if the channel wasn't created:**
+1. Check that the GHL workflow "Create Slack Channel" is published and active
+2. Make sure the Production record's name does not contain special characters (apostrophes, slashes, etc.)
+3. Check this channel — the relay app posts a message here every time a channel is created or if it fails
+
+---
+
+## 2. Push Campaign Custom Values (Automatic)
+
+**What it does:**
+When a Production record's Deal Stage changes to **"Live Active"**, the relay app automatically pushes campaign information into the dealership's subaccount custom values in GHL. This means the subaccount's email/SMS templates automatically have the correct campaign dates, coordinator name, and other details without anyone having to type them in manually.
+
+**What gets updated in the subaccount:**
+
+| Custom Value | What it contains | Example |
+|---|---|---|
+| campaign_dates | Full date range of the campaign | July 14–16 |
+| campaign_start_date | First day of the campaign | July 14 |
+| campaign_end_date | Last day of the campaign | July 16 |
+| kbb_ed | Month of the campaign (for KBB/ED templates) | July |
+| ask_for | Staff members to ask for at the dealership | Closer, Greeter |
+| event_coordinator | Same as ask_for | Closer, Greeter |
+
+**What triggers it:**
+A GHL workflow called **"Push Campaign Values"** watches for any Production record where the Deal Stage changes to "Live Active."
+
+**What to do if the values weren't updated:**
+1. Check that the GHL workflow "Push Campaign Values" is published and active
+2. Confirm the Production record has a linked dealership subaccount
+3. Check this channel for any error messages from the relay app
+
+---
+
+## 3. Auto-Archive Slack Channels (Automatic)
+
+**What it does:**
+Every Slack campaign channel is automatically archived 3 days after the campaign's end date. You do not need to archive channels manually.
+
+**How it works step by step:**
+1. When the Slack channel is created, the relay app reads the event_end date from the GHL Production record
+2. It calculates: archive date = event_end + 3 days
+3. It schedules two automatic jobs:
+   - **Day before archive:** A warning message is posted inside the channel so anyone still active in it knows it's about to close
+   - **Archive day:** The channel is archived at noon UTC
+
+**The warning message looks like this:**
+> ⚠️ Heads up! This channel will be automatically archived by GHL tomorrow. The campaign has ended. If you need to keep this channel open, please contact an admin.
+
+**What to do if a channel wasn't archived on time:**
+1. Check the Manus Schedules panel — the heartbeat job for that channel should appear there
+2. If the campaign had no end date in GHL when the channel was created, no archive job was scheduled — the channel will stay open until manually archived
+
+---
+
+## 4. Cancel an Auto-Archive
+
+**What it does:**
+If a campaign is cancelled before its end date and you don't want the channel to be archived automatically, you can cancel the archive job. The channel will stay open indefinitely.
+
+**How to cancel an archive:**
+Send a webhook call to the relay app with the production name. You can do this from a GHL workflow or by calling the URL directly.
+
+**Webhook details:**
+- URL: https://slackrelay-67pts7pe.manus.space/slack/cancel-archive
+- Method: POST
+- Body: {"production_name": "2607-westshore-honda-ame"}
+
+**What happens when you cancel:**
+- The archive heartbeat job is disabled
+- The warning heartbeat job is disabled
+- A message is posted to this channel confirming the cancellation
+- The Archive Schedule Canvas on this channel is updated to remove the channel
+
+**Note:** Cancelling an archive does not unarchive a channel that has already been archived. If a channel was archived by mistake, it must be unarchived manually in Slack (Settings → Manage → Archived Channels).
+
+---
+
+## 5. Archive Schedule Canvas (This Channel)
+
+There is a canvas pinned to this channel called **📅 Upcoming Channel Archives**. It shows a live list of all Slack campaign channels that are scheduled to be archived, sorted by date.
+
+**How to read it:**
+
+| Column | What it means |
+|---|---|
+| Channel | The Slack channel name |
+| Archive Date | The date the channel will be archived (campaign end + 3 days) |
+| Days Until Archive | How many days until the archive happens |
+
+The canvas automatically refreshes every time a channel is archived or an archive is cancelled.
+
+---
+
+## 6. Proof Stage Canvas Update (Automatic)
+
+**What it does:**
+When a Production record's Proof Stage is updated in GHL, the Production Canvas inside the corresponding Slack channel is automatically updated to reflect the new proof status. It updates the existing canvas in place — it does not create a new one.
+
+**What to do if the canvas wasn't updated:**
+1. Make sure the Slack channel name matches the Production record name exactly
+2. Check this channel for error messages
+3. If the canvas was deleted and recreated manually, run /ghl in the channel to re-link it
+
+---
+
+## 7. Backfill Tools (Admin Use Only)
+
+These tools are used to catch up channels that were created before the automations existed, or to fix missing jobs. Only use these if something went wrong or if new automations were added to existing channels.
+
+**Backfill Archive Jobs** — schedules archive heartbeat jobs for channels that don't have one yet
+- URL: https://slackrelay-67pts7pe.manus.space/slack/backfill-archive-jobs
+- Method: POST
+- Body: {"channels": ["2607-westshore-honda-ame", "2607-sun-toyota-ame"]}
+
+**Backfill Warning Jobs** — schedules the day-before warning heartbeat for channels that already have an archive job but no warning job
+- URL: https://slackrelay-67pts7pe.manus.space/slack/backfill-warning-jobs
+- Method: POST
+- Body: {}
+
+Both tools post a summary to this channel when they finish.
+
+---
+
+## Quick Reference — All Webhook URLs
+
+Base URL: https://slackrelay-67pts7pe.manus.space
+
+| What it does | Endpoint | Trigger |
+|---|---|---|
+| Create Slack channel | /slack/create-channel | GHL: Deal Stage → Production |
+| Push campaign custom values | /slack/push-campaign-values | GHL: Deal Stage → Live Active |
+| Cancel an archive | /slack/cancel-archive | Manual or GHL workflow |
+| Refresh archive canvas | /slack/refresh-archive-canvas | Manual |
+| Backfill archive jobs | /slack/backfill-archive-jobs | Manual (admin only) |
+| Backfill warning jobs | /slack/backfill-warning-jobs | Manual (admin only) |
+
+---
+
+*Last updated: July 2026 — maintained by the ADO automation team*`;
+
+    // Check if we already have a How To canvas
+    const existingCanvasId = await getCanvasByChannelName(HOWTO_CANVAS_KEY);
+
+    if (existingCanvasId) {
+      // Update the existing canvas
+      const editResp = await fetch("https://slack.com/api/canvases.edit", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          canvas_id: existingCanvasId,
+          changes: [{ operation: "replace", document_content: { type: "markdown", markdown } }],
+        }),
+      });
+      const editData = (await editResp.json()) as { ok: boolean; error?: string };
+      if (editData.ok) {
+        console.log(`[howto-canvas] Updated existing How To canvas ${existingCanvasId}`);
+        await fetch("https://slack.com/api/chat.postMessage", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            channel: GHL_NEW_SUB_CHANNEL_ID,
+            text: `📖 The *How To* canvas has been updated.`,
+          }),
+        });
+        return;
+      }
+      console.warn(`[howto-canvas] Failed to update canvas: ${editData.error} — will create new`);
+    }
+
+    // Create a new canvas and pin it to the channel
+    const createResp = await fetch("https://slack.com/api/conversations.canvases.create", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channel_id: GHL_NEW_SUB_CHANNEL_ID,
+        document_content: { type: "markdown", markdown },
+      }),
+    });
+    const createData = (await createResp.json()) as { ok: boolean; canvas_id?: string; error?: string };
+    if (!createData.ok || !createData.canvas_id) {
+      console.error(`[howto-canvas] Failed to create How To canvas: ${createData.error}`);
+      return;
+    }
+    const canvasId = createData.canvas_id;
+    await upsertCanvasLog(HOWTO_CANVAS_KEY, HOWTO_CANVAS_KEY, canvasId);
+    console.log(`[howto-canvas] Created How To canvas ${canvasId}`);
+    await fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channel: GHL_NEW_SUB_CHANNEL_ID,
+        text: `📖 The *How To* canvas has been created and pinned to this channel.`,
+      }),
+    });
+  } catch (err) {
+    console.error("[howto-canvas] Unexpected error:", err);
+  }
+});
