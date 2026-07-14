@@ -38,7 +38,9 @@ async function startServer() {
   // Skip for /slack/ghl which handles its own body parsing
   app.use("/slack", (req: Request, _res: Response, next: NextFunction) => {
     if (req.path === "/ghl" || req.path === "/ghl-webhook" || req.path === "/proof-status" || req.path === "/dealership-sync" || req.path === "/push-campaign-values" || req.path === "/create-channel" || req.path === "/backfill-archive-jobs" || req.path === "/reschedule-archive" ||
-      req.path === "/backfill-warning-jobs") {
+      req.path === "/backfill-warning-jobs" ||
+      req.path === "/cancel-archive" ||
+      req.path === "/refresh-archive-canvas") {
       return next();
     }
     const chunks: Buffer[] = [];

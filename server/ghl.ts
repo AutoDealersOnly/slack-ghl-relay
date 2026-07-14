@@ -1471,3 +1471,200 @@ ghlRouter.post("/backfill-warning-jobs", async (req: Request, res: Response) => 
     console.error("[backfill-warning-jobs] Unexpected error:", err);
   }
 });
+
+// POST /slack/cancel-archive — cancel a scheduled archive job for a channel
+// Body: { production_name: string }
+// Use when a campaign is cancelled and the channel should stay open indefinitely.
+ghlRouter.post("/cancel-archive", async (req: Request, res: Response) => {
+  res.status(200).send("ok");
+  const { production_name } = req.body as { production_name?: string };
+  if (!production_name) {
+    console.warn("[cancel-archive] Missing production_name in request body");
+    return;
+  }
+  const channelName = production_name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+  console.log(`[cancel-archive] Processing cancel for channel: ${channelName}`);
+
+  try {
+    const { getDb: getDb4 } = await import("./db");
+    const db = await getDb4();
+    if (!db) { console.error("[cancel-archive] DB not available"); return; }
+    const { channelArchiveJobs: cajTable } = await import("../drizzle/schema");
+    const { eq: eq4, and: and4 } = await import("drizzle-orm");
+
+    // Find the pending archive job for this channel
+    const jobs = await db
+      .select()
+      .from(cajTable)
+      .where(and4(eq4(cajTable.channelName, channelName), eq4(cajTable.status, "pending")))
+      .limit(1);
+
+    if (jobs.length === 0) {
+      console.warn(`[cancel-archive] No pending archive job found for ${channelName}`);
+      await fetch("https://slack.com/api/chat.postMessage", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channel: "C0ADXCMLS4W",
+          text: `⚠️ Cancel archive requested for *#${channelName}* but no pending archive job was found.`,
+        }),
+      });
+      return;
+    }
+
+    const job = jobs[0];
+
+    // Disable the archive heartbeat job if we have a taskUid
+    if (job.taskUid) {
+      try {
+        const { updateHeartbeatJob } = await import("./_core/heartbeat");
+        await updateHeartbeatJob(job.taskUid, { enable: false }, "");
+        console.log(`[cancel-archive] Disabled archive heartbeat job ${job.taskUid} for ${channelName}`);
+      } catch (hbErr) {
+        console.warn(`[cancel-archive] Could not disable heartbeat job ${job.taskUid}:`, hbErr);
+      }
+    }
+
+    // Also try to disable the warning heartbeat job (name: archive-warn-{channelId})
+    try {
+      const { updateHeartbeatJob } = await import("./_core/heartbeat");
+      // Warning jobs are named archive-warn-{channelId} — look up by channel ID
+      await updateHeartbeatJob(`archive-warn-${job.channelId}`, { enable: false }, "");
+      console.log(`[cancel-archive] Disabled warning heartbeat job for ${channelName}`);
+    } catch {
+      // Warning job may not exist for older channels — that's fine
+    }
+
+    // Mark DB record as cancelled
+    await db
+      .update(cajTable)
+      .set({ status: "failed" }) // reuse "failed" as closest available status; indicates no longer active
+      .where(eq4(cajTable.id, job.id));
+
+    console.log(`[cancel-archive] Cancelled archive job for ${channelName}`);
+
+    // Notify #ghl-new-subaccounts
+    await fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channel: "C0ADXCMLS4W",
+        text: `🚫 Auto-archive cancelled for *#${channelName}*. The channel will remain open indefinitely.`,
+      }),
+    });
+
+    // Refresh the archive schedule canvas
+    await refreshArchiveCanvas();
+  } catch (err) {
+    console.error(`[cancel-archive] Unexpected error for ${channelName}:`, err);
+  }
+});
+
+// Channel ID for #ghl-new-subaccounts
+const GHL_NEW_SUB_CHANNEL_ID = "C0ADXCMLS4W";
+// Key used to store the archive-schedule canvas ID in the canvas_log table
+const ARCHIVE_CANVAS_CHANNEL_ID = "ARCHIVE_SCHEDULE_CANVAS";
+
+/**
+ * Create or update the archive schedule canvas on #ghl-new-subaccounts.
+ * The canvas shows all pending archive jobs sorted by archive date.
+ */
+async function refreshArchiveCanvas(): Promise<void> {
+  try {
+    const { getDb: getDb5 } = await import("./db");
+    const db = await getDb5();
+    if (!db) { console.error("[archive-canvas] DB not available"); return; }
+    const { channelArchiveJobs: cajTable } = await import("../drizzle/schema");
+    const { eq: eq5, asc } = await import("drizzle-orm");
+
+    // Get all pending archive jobs sorted by archive date
+    const jobs = await db
+      .select()
+      .from(cajTable)
+      .where(eq5(cajTable.status, "pending"))
+      .orderBy(asc(cajTable.archiveAfter));
+
+    // Build the canvas markdown
+    const now = new Date();
+    const lines: string[] = [
+      "# 📅 Upcoming Channel Archives",
+      "",
+      `*Last updated: ${now.toUTCString()}*`,
+      "",
+    ];
+
+    if (jobs.length === 0) {
+      lines.push("No channels currently scheduled for archiving.");
+    } else {
+      lines.push("| Channel | Archive Date | Days Until Archive |");
+      lines.push("|---|---|---|");
+      for (const job of jobs) {
+        const archiveDate = new Date(job.archiveAfter);
+        const archiveDateStr = archiveDate.toISOString().slice(0, 10);
+        const daysUntil = Math.ceil((archiveDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        const daysLabel = daysUntil <= 0 ? "⚠️ Past due" : daysUntil === 1 ? "Tomorrow" : `${daysUntil} days`;
+        lines.push(`| #${job.channelName} | ${archiveDateStr} | ${daysLabel} |`);
+      }
+    }
+    const markdown = lines.join("\n");
+
+    // Check if we already have a canvas for this
+    const existingCanvasId = await getCanvasByChannelName(ARCHIVE_CANVAS_CHANNEL_ID);
+
+    if (existingCanvasId) {
+      // Update the existing canvas
+      const editResp = await fetch("https://slack.com/api/canvases.edit", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          canvas_id: existingCanvasId,
+          changes: [{ operation: "replace", document_content: { type: "markdown", markdown } }],
+        }),
+      });
+      const editData = (await editResp.json()) as { ok: boolean; error?: string };
+      if (editData.ok) {
+        console.log(`[archive-canvas] Updated existing canvas ${existingCanvasId}`);
+      } else {
+        console.warn(`[archive-canvas] Failed to update canvas: ${editData.error} — will create new`);
+        await createArchiveCanvas(GHL_NEW_SUB_CHANNEL_ID, markdown);
+      }
+    } else {
+      await createArchiveCanvas(GHL_NEW_SUB_CHANNEL_ID, markdown);
+    }
+  } catch (err) {
+    console.error("[archive-canvas] Error refreshing canvas:", err);
+  }
+}
+
+async function createArchiveCanvas(channelId: string, markdown: string): Promise<void> {
+  const createResp = await fetch("https://slack.com/api/canvases.create", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "📅 Upcoming Channel Archives",
+      document_content: { type: "markdown", markdown },
+    }),
+  });
+  const createData = (await createResp.json()) as { ok: boolean; canvas_id?: string; error?: string };
+  if (!createData.ok || !createData.canvas_id) {
+    console.error(`[archive-canvas] Failed to create canvas: ${createData.error}`);
+    return;
+  }
+  const canvasId = createData.canvas_id;
+  // Pin the canvas to the channel
+  await fetch("https://slack.com/api/conversations.canvases.create", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ channel_id: channelId, document_content: { type: "markdown", markdown } }),
+  });
+  // Save the canvas ID so we can update it next time
+  await upsertCanvasLog(ARCHIVE_CANVAS_CHANNEL_ID, ARCHIVE_CANVAS_CHANNEL_ID, canvasId);
+  console.log(`[archive-canvas] Created new archive schedule canvas ${canvasId} in ${channelId}`);
+}
+
+// POST /slack/refresh-archive-canvas — manually trigger a canvas refresh
+// (also called automatically after archive/cancel events)
+ghlRouter.post("/refresh-archive-canvas", async (req: Request, res: Response) => {
+  res.status(200).send("ok");
+  await refreshArchiveCanvas();
+});
