@@ -1,0 +1,26 @@
+# Project TODO
+
+- [x] Document the approved GHL-to-Slack relay architecture, protected settings, required Slack permissions, GoHighLevel workflow payloads, and recovery boundaries.
+- [ ] Add protected server-side settings for the ADO GHL API key, ADO location ID, Slack bot token, Slack signing secret, GHL webhook shared secret, notification channel, invitee user-group, named invitees, and optional external forwarding endpoint.
+- [ ] Write and validate a click-by-click administrator guide for obtaining each protected GHL and Slack setting without placing any value in chat, source code, or GitHub.
+- [ ] Maintain the user-designated private recovery-vault document with categorized relay credentials, identifiers, purpose, system location, rotation date, and replacement instructions, while excluding it from GitHub and the status page.
+- [ ] Add each newly recovered or replaced relay setting to the private recovery vault as part of the completion checklist, using a secure in-place editing path or approved temporary staging process.
+- [ ] Reorganize the current private recovery-vault entries under clearly labeled GoHighLevel, Slack, relay/webhook, and dealership-access sections without changing or exposing their values.
+- [ ] Record exposed credentials by category and rotation status only, never by value; replace legacy verification credentials and the previously embedded external webhook address before live activation.
+- [x] Add a database schema for campaign-channel records, Slack canvas links, archive schedules, delivery attempts, operational action logs, and protected runtime settings metadata.
+- [x] Apply the database migration and verify the resulting schema without inserting production or mock customer data.
+- [x] Implement authenticated GoHighLevel webhook handling that rejects invalid or missing authorization before any campaign, Slack, or dealer-subaccount action runs.
+- [x] Implement normalized campaign channel naming and idempotent Production Canvas creation or in-place update from the ADO Production and related Dealership records.
+- [x] Implement proof-stage Slack notices with settings-based recipients and notification destinations.
+- [x] Recreate the documented “GHL Production Message to Slack” workflow contract: Production Changed trigger filtered to Proof Stage has changed, with JSON fields for production name and proof stage, protected by the new authorization header.
+- [x] Implement idempotent campaign-channel creation, member invitations, Production Canvas setup, and operational notifications.
+- [x] Implement dealer-information custom-value syncing to the linked dealership subaccount using the stored location ID and protected API key returned only from the ADO Dealership record.
+- [x] Implement campaign custom-value syncing to the linked dealership subaccount with explicit result logging.
+- [x] Implement end-date-based archive warning and channel archive jobs with authenticated scheduled callbacks, duplicate prevention, retries, cancellation, rescheduling, and archive-status persistence.
+- [x] Implement secret-free operational logs that record action outcomes, failure details, retry state, and safe diagnostic context.
+- [x] Build an authenticated internal recovery/status page with configured-item readiness, relay health, campaign archive state, and failed-action visibility, without exposing secrets.
+- [x] Add unit tests for authorization rejection, webhook idempotency, canvas update decisions, archive scheduling, retry behavior, and secret-free status serialization.
+- [x] Run type checking and unit tests; resolve all implementation errors before testing live integrations.
+- [x] Write a plain-English GitHub recovery guide covering setup, test procedure, workflow configuration, settings rotation, incident handling, backup confirmation, and safe restore steps.
+- [ ] Update the company GitHub repository with the approved source, configuration template, migration files, tests, and recovery guide, excluding all secrets.
+- [ ] Validate the relay with non-production test data in ABC Dealer and a designated Slack test channel before live workflow activation.
