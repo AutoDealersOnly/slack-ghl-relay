@@ -30,3 +30,11 @@ At minimum, send:
 ```
 
 The proof-stage field is needed only for `proof_status`; other events can send just the production name. The relay fetches fresh source data from ADO rather than trusting an old workflow snapshot.
+
+## Slack `/ghl` recovery command
+
+The Slack app's `/ghl` command has a separate signed endpoint. It links the **existing** channel in which the command is run to the matching ADO Production record, refreshes that channel's Production Canvas, and records the channel/Canvas relationship. It does not create a second campaign channel.
+
+```text
+/api/slack/commands/ghl
+```

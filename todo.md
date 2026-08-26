@@ -34,4 +34,8 @@
 - [x] Write a plain-English GitHub recovery guide covering setup, test procedure, workflow configuration, settings rotation, incident handling, backup confirmation, and safe restore steps.
 - [x] Update the company GitHub repository with the approved source, configuration template, migration files, tests, and recovery guide, excluding all secrets.
 - [ ] Validate the relay with non-production test data in ABC Dealer and a designated Slack test channel before live workflow activation.
+- [ ] Restore the ABC test campaign’s channel-to-relay link without relying on the unavailable former `/ghl` command endpoint.
+- [ ] Reconnect the GHL Production Message to Slack workflow to the rebuilt protected proof-status endpoint and validate one ABC proof-stage update.
+- [ ] Preserve the former known-good GHL Production Message to Slack behavior; change only the lost relay connections needed to restore it.
+- [ ] Inventory and classify the newly uploaded prior-conversation recovery archive in plain English before using any item in a future rebuild.
 - [ ] Explain the purpose, trigger, data handled, Slack effect, and test plan for each restored automation before configuring or activating it.
