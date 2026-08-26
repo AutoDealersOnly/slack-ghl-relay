@@ -18,6 +18,10 @@
 - [x] Implement authenticated GoHighLevel webhook handling that rejects invalid or missing authorization before any campaign, Slack, or dealer-subaccount action runs.
 - [x] Implement normalized campaign channel naming and idempotent Production Canvas creation or in-place update from the ADO Production and related Dealership records.
 - [x] Implement proof-stage Slack notices with settings-based recipients and notification destinations.
+- [x] Restore the original proof-stage recipient rules through protected settings: David for proof requests and approved uploads, the Deals group for proofing needed, and Brian for sent-to-print, without hardcoding Slack IDs.
+- [x] Replace legacy direct-message identifiers with the correct Slack member identifiers in the private recovery vault before recipient validation.
+- [x] Confirm the recovered proof-stage recipient rules with the user before configuring them.
+- [x] Restore the original proof-stage message details: mail pieces, event dates, dealership, job number, and the sent-to-print MBI wording.
 - [x] Recreate the documented “GHL Production Message to Slack” workflow contract: Production Changed trigger filtered to Proof Stage has changed, with JSON fields for production name and proof stage, protected by the new authorization header.
 - [x] Implement idempotent campaign-channel creation, member invitations, Production Canvas setup, and operational notifications.
 - [x] Implement dealer-information custom-value syncing to the linked dealership subaccount using the stored location ID and protected API key returned only from the ADO Dealership record.
@@ -28,5 +32,6 @@
 - [x] Add unit tests for authorization rejection, webhook idempotency, canvas update decisions, archive scheduling, retry behavior, and secret-free status serialization.
 - [x] Run type checking and unit tests; resolve all implementation errors before testing live integrations.
 - [x] Write a plain-English GitHub recovery guide covering setup, test procedure, workflow configuration, settings rotation, incident handling, backup confirmation, and safe restore steps.
-- [ ] Update the company GitHub repository with the approved source, configuration template, migration files, tests, and recovery guide, excluding all secrets.
+- [x] Update the company GitHub repository with the approved source, configuration template, migration files, tests, and recovery guide, excluding all secrets.
 - [ ] Validate the relay with non-production test data in ABC Dealer and a designated Slack test channel before live workflow activation.
+- [ ] Explain the purpose, trigger, data handled, Slack effect, and test plan for each restored automation before configuring or activating it.

@@ -7,7 +7,10 @@ export const RELAY_SETTING_KEYS = [
   "SLACK_NOTIFICATION_CHANNEL_ID",
   "SLACK_DEALS_USERGROUP_ID",
   "SLACK_ALWAYS_INVITEE_USER_IDS",
-  "SLACK_PROOF_STAGE_MENTIONS",
+  "SLACK_PROOF_REQUEST_USER_ID",
+  "SLACK_PROOFING_NEEDED_USERGROUP_ID",
+  "SLACK_PROOF_APPROVED_USER_ID",
+  "SLACK_PROOF_SENT_TO_PRINT_USER_ID",
 ] as const;
 
 export type RelaySettingKey = (typeof RELAY_SETTING_KEYS)[number];
@@ -21,7 +24,10 @@ export type RelayConfig = {
   slackNotificationChannelId: string;
   slackDealsUserGroupId: string;
   slackAlwaysInviteeUserIds: string[];
-  slackProofStageMentions: string[];
+  slackProofRequestUserId: string;
+  slackProofingNeededUserGroupId: string;
+  slackProofApprovedUserId: string;
+  slackProofSentToPrintUserId: string;
 };
 
 export const getRelayConfig = (): RelayConfig => ({
@@ -36,10 +42,10 @@ export const getRelayConfig = (): RelayConfig => ({
     .split(",")
     .map(value => value.trim())
     .filter(Boolean),
-  slackProofStageMentions: (process.env.SLACK_PROOF_STAGE_MENTIONS ?? "")
-    .split("|")
-    .map(value => value.trim())
-    .filter(Boolean),
+  slackProofRequestUserId: process.env.SLACK_PROOF_REQUEST_USER_ID?.trim() ?? "",
+  slackProofingNeededUserGroupId: process.env.SLACK_PROOFING_NEEDED_USERGROUP_ID?.trim() ?? "",
+  slackProofApprovedUserId: process.env.SLACK_PROOF_APPROVED_USER_ID?.trim() ?? "",
+  slackProofSentToPrintUserId: process.env.SLACK_PROOF_SENT_TO_PRINT_USER_ID?.trim() ?? "",
 });
 
 export type RelayReadiness = {
@@ -57,7 +63,10 @@ const settingLabels: Record<RelaySettingKey, string> = {
   SLACK_NOTIFICATION_CHANNEL_ID: "Slack notification channel",
   SLACK_DEALS_USERGROUP_ID: "Slack deals user group",
   SLACK_ALWAYS_INVITEE_USER_IDS: "Always-invite Slack users",
-  SLACK_PROOF_STAGE_MENTIONS: "Proof-stage Slack mentions",
+  SLACK_PROOF_REQUEST_USER_ID: "Proof request Slack recipient",
+  SLACK_PROOFING_NEEDED_USERGROUP_ID: "Proofing-needed Slack group",
+  SLACK_PROOF_APPROVED_USER_ID: "Approved-upload Slack recipient",
+  SLACK_PROOF_SENT_TO_PRINT_USER_ID: "Sent-to-print Slack recipient",
 };
 
 export const getRelayReadiness = (): RelayReadiness[] => {
@@ -71,7 +80,10 @@ export const getRelayReadiness = (): RelayReadiness[] => {
     SLACK_NOTIFICATION_CHANNEL_ID: Boolean(config.slackNotificationChannelId),
     SLACK_DEALS_USERGROUP_ID: Boolean(config.slackDealsUserGroupId),
     SLACK_ALWAYS_INVITEE_USER_IDS: config.slackAlwaysInviteeUserIds.length > 0,
-    SLACK_PROOF_STAGE_MENTIONS: config.slackProofStageMentions.length > 0,
+    SLACK_PROOF_REQUEST_USER_ID: Boolean(config.slackProofRequestUserId),
+    SLACK_PROOFING_NEEDED_USERGROUP_ID: Boolean(config.slackProofingNeededUserGroupId),
+    SLACK_PROOF_APPROVED_USER_ID: Boolean(config.slackProofApprovedUserId),
+    SLACK_PROOF_SENT_TO_PRINT_USER_ID: Boolean(config.slackProofSentToPrintUserId),
   };
 
   return RELAY_SETTING_KEYS.map(key => ({

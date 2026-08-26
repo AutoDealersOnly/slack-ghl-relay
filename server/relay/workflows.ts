@@ -17,7 +17,7 @@ import {
   joinAndInviteCampaignChannel,
   postSlackMessage,
 } from "./slack";
-import type { ProductionWebhookPayload, RelayEventType } from "./types";
+import type { DealershipProperties, ProductionProperties, ProductionWebhookPayload, RelayEventType } from "./types";
 
 type ProductionContext = {
   channelName: string;
@@ -92,22 +92,44 @@ export async function refreshProductionCanvas(payload: ProductionWebhookPayload)
   return updated;
 }
 
-const proofMessage = (proofStage: string, productionName: string): string | null => {
+const formatProofDate = (value?: string): string => {
+  if (!value) return "date not set";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat("en-US", { month: "numeric", day: "numeric", year: "numeric" }).format(parsed);
+};
+
+export const buildProofStageMessage = (
+  proofStage: string,
+  production: ProductionProperties,
+  dealership: DealershipProperties,
+  config: ReturnType<typeof getRelayConfig>
+): string | null => {
   const stage = proofStage.trim().toLowerCase().replace(/\s+/g, "_");
-  const labels: Record<string, string> = {
-    request_proof: "Proof request received",
-    proofing_needed: "Proofing is needed",
-    approved_to_upload: "Approved to upload",
-    sent_to_print: "Sent to print",
+  const mailpieces = [production.mailer, production.mailer_2].filter(Boolean).join(" / ") || "mail piece not listed";
+  const dateRange = `${formatProofDate(production.event_start)} - ${formatProofDate(production.event_end)}`;
+  const dealershipName = dealership.dealership_name || "dealership not listed";
+  const jobNumbers = production.job_numbers || "not listed";
+  const messages: Record<string, string> = {
+    request_proof: `*🖨️ Proof Request*\n<@${config.slackProofRequestUserId}> Proof request *${mailpieces}* ${dateRange} for *${dealershipName}*`,
+    proofing_needed: `*📋 Proofing Needed*\n<!subteam^${config.slackProofingNeededUserGroupId}> proofing needed on the mailpiece(s) above. Thanks!!!`,
+    approved_to_upload: `*✅ Approved to Upload*\n<@${config.slackProofApprovedUserId}> approved to upload Job #*${jobNumbers}*`,
+    sent_to_print: `*📤 Sent to Print*\nUploaded to MBI 📤 <@${config.slackProofSentToPrintUserId}>`,
   };
-  const label = labels[stage];
-  return label ? `*${label}* — ${productionName}` : null;
+  const message = messages[stage];
+  return message && !message.includes("<@>") && !message.includes("^>") ? message : null;
 };
 
 export async function sendProofStageNotice(payload: ProductionWebhookPayload) {
   const context = await loadProductionContext(payload);
   const campaign = await getCampaignByChannelName(context.channelName);
-  const message = proofMessage(payload.proof_stage ?? context.production.properties.proof_stage ?? "", context.production.properties.production ?? payload.production_name);
+  const config = getRelayConfig();
+  const message = buildProofStageMessage(
+    payload.proof_stage ?? context.production.properties.proof_stage ?? "",
+    context.production.properties,
+    context.dealership?.properties ?? {},
+    config
+  );
   if (!campaign?.channelId || !message) {
     await logRelayAction({
       campaignId: campaign?.id ?? null,
@@ -117,13 +139,7 @@ export async function sendProofStageNotice(payload: ProductionWebhookPayload) {
     });
     return;
   }
-  const mentions = getRelayConfig().slackProofStageMentions.join(" ");
-  const routedMessage = mentions ? `${message}\n${mentions}` : message;
-  await postSlackMessage(campaign.channelId, routedMessage);
-  const notificationChannel = getRelayConfig().slackNotificationChannelId;
-  if (notificationChannel && notificationChannel !== campaign.channelId) {
-    await postSlackMessage(notificationChannel, routedMessage);
-  }
+  await postSlackMessage(campaign.channelId, message);
   await logRelayAction({ campaignId: campaign.id, action: "proof_stage_notice", outcome: "success", detail: "Proof-stage notice posted to the campaign channel." });
 }
 

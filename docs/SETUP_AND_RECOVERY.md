@@ -24,7 +24,10 @@ Add these values in the project’s protected settings area. Do **not** place th
 | `SLACK_NOTIFICATION_CHANNEL_ID` | Receives the operational completion and archive notices. | Open the selected Slack channel and copy its channel ID. |
 | `SLACK_DEALS_USERGROUP_ID` | Identifies the Slack group invited to new campaign channels. | Slack workspace user-group administration. |
 | `SLACK_ALWAYS_INVITEE_USER_IDS` | Comma-separated people who are always invited to new campaign channels. | Each person’s Slack member ID. |
-| `SLACK_PROOF_STAGE_MENTIONS` | Slack-ready mentions added to proof-stage notices; separate entries with `|`. | Slack member or user-group mentions agreed by operations. |
+| `SLACK_PROOF_REQUEST_USER_ID` | Slack member who receives Request Proof notices. | David’s Slack member ID in the private recovery vault. |
+| `SLACK_PROOFING_NEEDED_USERGROUP_ID` | Slack group tagged when Proofing Needed is selected. | The Deals user-group ID in the private recovery vault. |
+| `SLACK_PROOF_APPROVED_USER_ID` | Slack member who receives Approved to Upload notices. | David’s Slack member ID in the private recovery vault. |
+| `SLACK_PROOF_SENT_TO_PRINT_USER_ID` | Slack member who receives Sent to Print notices. | Brian’s Slack member ID in the private recovery vault. |
 
 ### Recovering the Slack values
 

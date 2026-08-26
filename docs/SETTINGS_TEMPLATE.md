@@ -12,4 +12,7 @@ Use this file as a **name-only checklist** when preparing protected project sett
 | `SLACK_NOTIFICATION_CHANNEL_ID` | [ ] |  | [ ] |
 | `SLACK_DEALS_USERGROUP_ID` | [ ] |  | [ ] |
 | `SLACK_ALWAYS_INVITEE_USER_IDS` | [ ] |  | [ ] |
-| `SLACK_PROOF_STAGE_MENTIONS` | [ ] |  | [ ] |
+| `SLACK_PROOF_REQUEST_USER_ID` | [ ] |  | [ ] |
+| `SLACK_PROOFING_NEEDED_USERGROUP_ID` | [ ] |  | [ ] |
+| `SLACK_PROOF_APPROVED_USER_ID` | [ ] |  | [ ] |
+| `SLACK_PROOF_SENT_TO_PRINT_USER_ID` | [ ] |  | [ ] |
