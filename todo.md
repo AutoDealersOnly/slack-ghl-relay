@@ -1,19 +1,32 @@
-# Slack → Make Relay TODO
+# Project TODO
 
-- [x] POST /slack/events route with Slack URL verification challenge handler
-- [x] Forward member_joined_channel events to Make webhook
-- [x] Validate Slack request signatures (reject invalid with 401)
-- [x] Root route GET / with minimal health indicator
-- [x] Slack signing secret injected via environment variable
-- [x] Build /slack/ghl endpoint — calls GHL directly, creates Slack canvas (bypasses Make entirely)
-- [x] Update Slack app slash command URL to permanent production URL after publish
-- [x] Add canvas_log DB table to store channelId → canvasId mappings
-- [x] /slack/ghl saves canvas_id to DB after creation
-- [x] Build /slack/ghl-webhook endpoint for GHL workflow auto-update trigger
-- [x] Set up GHL Production workflow to call /slack/ghl-webhook on record update
-- [x] Switch canvas update to in-place edit (canvases.edit) to eliminate ghost Deleted file tabs
-- [x] Add /slack/push-campaign-values endpoint — push campaign dates, ask_for, event_coordinator, kbb_ed to subaccount custom values when Production status → "production"
-- [x] Add /slack/create-channel endpoint — auto-create Slack channel + canvas when Production status → "production"
-- [x] Add channel_archive_jobs DB table to store channelId, channelName, archiveAfter date, taskUid
-- [x] Add /api/scheduled/archive-channel endpoint — archives channel when called by heartbeat job
-- [x] Schedule heartbeat job per channel to fire 3 days after campaign end date
+- [x] Document the approved GHL-to-Slack relay architecture, protected settings, required Slack permissions, GoHighLevel workflow payloads, and recovery boundaries.
+- [ ] Add protected server-side settings for the ADO GHL API key, ADO location ID, Slack bot token, Slack signing secret, GHL webhook shared secret, notification channel, invitee user-group, named invitees, and optional external forwarding endpoint.
+- [ ] Collect protected settings in small, independently submittable groups so the relay can be configured and tested without waiting for every optional Slack value.
+- [ ] Consult the user-designated private recovery-vault document before requesting each existing relay setting; request only values that are absent or must be newly created.
+- [ ] When user action is needed, identify the exact external page that requires it and never ask the user to take over the private recovery-vault document for an unrelated Slack action.
+- [ ] Preserve the existing GHL Slack app installation during recovery; do not reinstall it or change its scopes unless the user explicitly approves a required change.
+- [x] Verify the Slack bot connection using a read-only identity check before any relay action can create, update, message, invite, archive, or otherwise change Slack data.
+- [ ] Validate the ADO API key only through the rebuilt Production-and-Dealership relay flow in ABC Dealer; do not treat the standalone location endpoint’s rejection as evidence that the user-confirmed current full-scope key is invalid.
+- [ ] Write and validate a click-by-click administrator guide for obtaining each protected GHL and Slack setting without placing any value in chat, source code, or GitHub.
+- [ ] Maintain the user-designated private recovery-vault document with categorized relay credentials, identifiers, purpose, system location, rotation date, and replacement instructions, while excluding it from GitHub and the status page.
+- [ ] Add each newly recovered or replaced relay setting to the private recovery vault as part of the completion checklist, using a secure in-place editing path or approved temporary staging process.
+- [ ] Reorganize the current private recovery-vault entries under clearly labeled GoHighLevel, Slack, relay/webhook, and dealership-access sections without changing or exposing their values.
+- [ ] Record exposed credentials by category and rotation status only, never by value; replace legacy verification credentials and the previously embedded external webhook address before live activation.
+- [x] Add a database schema for campaign-channel records, Slack canvas links, archive schedules, delivery attempts, operational action logs, and protected runtime settings metadata.
+- [x] Apply the database migration and verify the resulting schema without inserting production or mock customer data.
+- [x] Implement authenticated GoHighLevel webhook handling that rejects invalid or missing authorization before any campaign, Slack, or dealer-subaccount action runs.
+- [x] Implement normalized campaign channel naming and idempotent Production Canvas creation or in-place update from the ADO Production and related Dealership records.
+- [x] Implement proof-stage Slack notices with settings-based recipients and notification destinations.
+- [x] Recreate the documented “GHL Production Message to Slack” workflow contract: Production Changed trigger filtered to Proof Stage has changed, with JSON fields for production name and proof stage, protected by the new authorization header.
+- [x] Implement idempotent campaign-channel creation, member invitations, Production Canvas setup, and operational notifications.
+- [x] Implement dealer-information custom-value syncing to the linked dealership subaccount using the stored location ID and protected API key returned only from the ADO Dealership record.
+- [x] Implement campaign custom-value syncing to the linked dealership subaccount with explicit result logging.
+- [x] Implement end-date-based archive warning and channel archive jobs with authenticated scheduled callbacks, duplicate prevention, retries, cancellation, rescheduling, and archive-status persistence.
+- [x] Implement secret-free operational logs that record action outcomes, failure details, retry state, and safe diagnostic context.
+- [x] Build an authenticated internal recovery/status page with configured-item readiness, relay health, campaign archive state, and failed-action visibility, without exposing secrets.
+- [x] Add unit tests for authorization rejection, webhook idempotency, canvas update decisions, archive scheduling, retry behavior, and secret-free status serialization.
+- [x] Run type checking and unit tests; resolve all implementation errors before testing live integrations.
+- [x] Write a plain-English GitHub recovery guide covering setup, test procedure, workflow configuration, settings rotation, incident handling, backup confirmation, and safe restore steps.
+- [ ] Update the company GitHub repository with the approved source, configuration template, migration files, tests, and recovery guide, excluding all secrets.
+- [ ] Validate the relay with non-production test data in ABC Dealer and a designated Slack test channel before live workflow activation.

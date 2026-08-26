@@ -1,11 +1,11 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "549c4cb8-6f53-49fc-bb57-2a209329143d",
-  "prevId": "2bda1976-f448-4e22-aab1-4f68a40f21a7",
+  "id": "355e8dff-873d-4001-aaf1-dca93eb53964",
+  "prevId": "e27cbec7-4fbd-4c25-816c-762bdd01a355",
   "tables": {
-    "canvas_log": {
-      "name": "canvas_log",
+    "relay_action_logs": {
+      "name": "relay_action_logs",
       "columns": {
         "id": {
           "name": "id",
@@ -14,9 +14,92 @@
           "notNull": true,
           "autoincrement": true
         },
-        "channelId": {
-          "name": "channelId",
-          "type": "varchar(32)",
+        "campaignId": {
+          "name": "campaignId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "action": {
+          "name": "action",
+          "type": "varchar(96)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "enum('success','failed','skipped')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "detail": {
+          "name": "detail",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "attemptCount": {
+          "name": "attemptCount",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {
+        "relay_action_logs_campaign_idx": {
+          "name": "relay_action_logs_campaign_idx",
+          "columns": [
+            "campaignId"
+          ],
+          "isUnique": false
+        },
+        "relay_action_logs_created_at_idx": {
+          "name": "relay_action_logs_created_at_idx",
+          "columns": [
+            "createdAt"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "relay_action_logs_id": {
+          "name": "relay_action_logs_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "relay_campaigns": {
+      "name": "relay_campaigns",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "productionName": {
+          "name": "productionName",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -26,14 +109,71 @@
           "type": "varchar(128)",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "channelId": {
+          "name": "channelId",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "canvasId": {
           "name": "canvasId",
           "type": "varchar(32)",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
+        },
+        "dealershipRecordId": {
+          "name": "dealershipRecordId",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "dealershipName": {
+          "name": "dealershipName",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "eventEndDate": {
+          "name": "eventEndDate",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "archiveAfter": {
+          "name": "archiveAfter",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "archiveTaskUid": {
+          "name": "archiveTaskUid",
+          "type": "varchar(65)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "warningTaskUid": {
+          "name": "warningTaskUid",
+          "type": "varchar(65)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "archiveStatus": {
+          "name": "archiveStatus",
+          "type": "enum('not_scheduled','scheduled','cancelled','archived','failed')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'not_scheduled'"
         },
         "createdAt": {
           "name": "createdAt",
@@ -53,28 +193,43 @@
           "default": "(now())"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "relay_campaigns_channel_name_unique": {
+          "name": "relay_campaigns_channel_name_unique",
+          "columns": [
+            "channelName"
+          ],
+          "isUnique": true
+        },
+        "relay_campaigns_archive_task_uid_idx": {
+          "name": "relay_campaigns_archive_task_uid_idx",
+          "columns": [
+            "archiveTaskUid"
+          ],
+          "isUnique": false
+        },
+        "relay_campaigns_warning_task_uid_idx": {
+          "name": "relay_campaigns_warning_task_uid_idx",
+          "columns": [
+            "warningTaskUid"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "canvas_log_id": {
-          "name": "canvas_log_id",
+        "relay_campaigns_id": {
+          "name": "relay_campaigns_id",
           "columns": [
             "id"
           ]
         }
       },
-      "uniqueConstraints": {
-        "canvas_log_channelId_unique": {
-          "name": "canvas_log_channelId_unique",
-          "columns": [
-            "channelId"
-          ]
-        }
-      },
+      "uniqueConstraints": {},
       "checkConstraint": {}
     },
-    "channel_archive_jobs": {
-      "name": "channel_archive_jobs",
+    "relay_settings_metadata": {
+      "name": "relay_settings_metadata",
       "columns": {
         "id": {
           "name": "id",
@@ -83,49 +238,33 @@
           "notNull": true,
           "autoincrement": true
         },
-        "channelId": {
-          "name": "channelId",
-          "type": "varchar(32)",
+        "settingKey": {
+          "name": "settingKey",
+          "type": "varchar(96)",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "channelName": {
-          "name": "channelName",
-          "type": "varchar(128)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "archiveAfter": {
-          "name": "archiveAfter",
+        "configuredAt": {
+          "name": "configuredAt",
           "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "taskUid": {
-          "name": "taskUid",
-          "type": "varchar(64)",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "status": {
-          "name": "status",
-          "type": "enum('pending','archived','failed')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'pending'"
-        },
-        "createdAt": {
-          "name": "createdAt",
+        "rotatedAt": {
+          "name": "rotatedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "notNull": false,
+          "autoincrement": false
+        },
+        "recoveryVaultVerifiedAt": {
+          "name": "recoveryVaultVerifiedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "updatedAt": {
           "name": "updatedAt",
@@ -137,11 +276,102 @@
           "default": "(now())"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "relay_settings_metadata_setting_key_unique": {
+          "name": "relay_settings_metadata_setting_key_unique",
+          "columns": [
+            "settingKey"
+          ],
+          "isUnique": true
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "channel_archive_jobs_id": {
-          "name": "channel_archive_jobs_id",
+        "relay_settings_metadata_id": {
+          "name": "relay_settings_metadata_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "relay_webhook_receipts": {
+      "name": "relay_webhook_receipts",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "deliveryKey": {
+          "name": "deliveryKey",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "eventType": {
+          "name": "eventType",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "payloadHash": {
+          "name": "payloadHash",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "enum('accepted','processed','failed')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'accepted'"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "processedAt": {
+          "name": "processedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "relay_webhook_receipts_delivery_key_unique": {
+          "name": "relay_webhook_receipts_delivery_key_unique",
+          "columns": [
+            "deliveryKey"
+          ],
+          "isUnique": true
+        },
+        "relay_webhook_receipts_event_type_idx": {
+          "name": "relay_webhook_receipts_event_type_idx",
+          "columns": [
+            "eventType"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "relay_webhook_receipts_id": {
+          "name": "relay_webhook_receipts_id",
           "columns": [
             "id"
           ]

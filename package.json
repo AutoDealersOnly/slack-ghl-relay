@@ -1,5 +1,5 @@
 {
-  "name": "slack-make-relay",
+  "name": "ghl-slack-relay-recovery",
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
