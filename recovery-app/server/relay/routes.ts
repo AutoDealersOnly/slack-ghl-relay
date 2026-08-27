@@ -7,7 +7,12 @@ import { redactErrorDetail, isAuthorizedGhlWebhook } from "./security";
 import { productionWebhookPayloadSchema, relayEventTypes, type RelayEventType } from "./types";
 import { handleRelayWorkflow } from "./workflows";
 import { runOncePerWebhook, shouldDeduplicateRelayEvent } from "./idempotency";
-import { handleLegacyCreateChannelWebhook, handleLegacyGhlWebhook, handleLegacyProofStatusWebhook } from "./legacy-ghl-webhook";
+import {
+  handleLegacyCampaignValueSyncWebhook,
+  handleLegacyCreateChannelWebhook,
+  handleLegacyGhlWebhook,
+  handleLegacyProofStatusWebhook,
+} from "./legacy-ghl-webhook";
 
 const relayRouter = Router();
 
@@ -17,11 +22,12 @@ const isRelayEventType = (value: string): value is RelayEventType =>
 export const selectLegacyHeaderlessHandler = (
   eventType: string,
   authorized: boolean
-): "canvas" | "proof" | "create" | null => {
+): "canvas" | "proof" | "create" | "campaign_values" | null => {
   if (authorized) return null;
   if (eventType === "production_update") return "canvas";
   if (eventType === "proof_status") return "proof";
   if (eventType === "create_channel") return "create";
+  if (eventType === "push_campaign_values") return "campaign_values";
   return null;
 };
 
@@ -44,6 +50,10 @@ relayRouter.post("/ghl/:eventType", async (req: Request, res: Response) => {
   }
   if (legacyHandler === "create") {
     handleLegacyCreateChannelWebhook(req, res);
+    return;
+  }
+  if (legacyHandler === "campaign_values") {
+    handleLegacyCampaignValueSyncWebhook(req, res);
     return;
   }
   if (!authorized) {

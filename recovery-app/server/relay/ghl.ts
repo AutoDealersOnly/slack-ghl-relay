@@ -142,17 +142,34 @@ const formatMonthDay = (value: string | undefined): string => {
   );
 };
 
-export function campaignCustomValues(properties: ProductionProperties): Record<string, string> {
+export function campaignCustomValues(
+  properties: ProductionProperties,
+  dealership: DealershipProperties
+): Record<string, string> {
   const start = formatMonthDay(properties.event_start);
   const end = formatMonthDay(properties.event_end);
+  const startMonth = start.split(" ")[0] ?? "";
+  const endMonth = end.split(" ")[0] ?? "";
   const endDay = properties.event_end?.split("-")[2]?.replace(/^0/, "") ?? "";
   const team = [properties.closer, properties.greeter].filter(Boolean).join(", ");
+  const alias = dealership.alias?.trim() ?? "";
+  const aliasFirstName = alias.split(/\s+/)[0] ?? "";
+  const campaignDates =
+    start && end
+      ? startMonth === endMonth
+        ? `${start}-${endDay}`
+        : `${start}-${end}`
+      : start || end;
   return {
-    campaign_dates: start && end ? `${start}-${endDay}` : start || end,
+    campaign_dates: campaignDates,
     campaign_start_date: start,
     campaign_end_date: end,
-    kbb_ed: start.split(" ")[0] ?? "",
-    ask_for: team,
+    ask_for: alias,
+    alias_name: alias,
+    alias_1st_name: aliasFirstName,
+    alias_position: dealership.alias_position ?? "",
+    kbb_ed: startMonth,
     event_coodinator: team,
+    campaign_theme: [properties.mailer, properties.mailer_2].filter(Boolean).join(" / "),
   };
 }

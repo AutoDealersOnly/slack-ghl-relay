@@ -53,9 +53,9 @@ This catalog is the working map for the relay rebuild. **Nothing in this documen
 
 **Purpose.** Push mapped Production/campaign values from ADO to the linked dealership subaccount.
 
-**Trigger.** A protected campaign-sync workflow webhook.
+**Trigger.** The existing ADO Post Production campaign-sync workflow sends the Production name to the relay. The recovered receiver supports the original immediate-acknowledgment Custom Webhook behavior as well as protected relay delivery.
 
-**What the relay does.** It finds the linked Dealership record, uses its stored location ID and key only for that operation, updates the mapped campaign values, and records a safe success or failure result.
+**What the relay does.** It finds the linked Dealership record, uses its stored location ID and key only for that operation, updates only the approved campaign values, posts a confirmation in that campaign’s existing Slack channel, and records a safe success or failure result. The full approved mapping and date rules are in `CAMPAIGN_CUSTOM_VALUE_SYNC.md`.
 
 **Test plan.** Use ABC Dealer only. Change one designated test campaign value, run the sync, and verify the correct matching value in ABC Dealer.
 
@@ -67,7 +67,7 @@ This catalog is the working map for the relay rebuild. **Nothing in this documen
 
 **What the relay does.** It schedules one warning **one day before the archive date** and one archive **three days after the campaign end date**. It stores those durable schedule IDs and archive state in the database. A cancellation removes both scheduled jobs; a changed or cleared event end date replaces or cancels them rather than creating duplicates. The archive action is authenticated and skips already completed or cancelled campaigns.
 
-**Verified ABC result.** The active ABC test channel was safely rescheduled from its current event end date. Its stored archive date is exactly three days later, its warning and archive jobs are enabled in the durable scheduler, and no Slack channel was archived during the check.
+**Verified ABC result.** The existing **Create Slack Channel** workflow was reconnected by replacing only its former lost Custom Webhook address. A safe ABC workflow test reached the rebuilt receiver, reused the existing channel, and created no extra channel or archive action. The ABC Event End was September 13 and the durable archive job was corrected to September 16—exactly three days later. Its warning and archive jobs are enabled in the durable scheduler.
 
 ## Operating Rules
 

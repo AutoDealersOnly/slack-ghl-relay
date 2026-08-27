@@ -167,8 +167,18 @@ export async function syncDealershipValues(payload: ProductionWebhookPayload) {
 
 export async function syncCampaignValues(payload: ProductionWebhookPayload) {
   const { context, dealership, locationId, apiKey } = await resolveDealershipForSync(payload);
-  const result = await syncCustomValues(locationId, apiKey, campaignCustomValues(context.production.properties));
-  await postOptionalNotification(`Campaign values synced for *${dealership.dealership_name ?? context.channelName}*: ${result.updated} updated, ${result.skipped} skipped.`);
+  const result = await syncCustomValues(
+    locationId,
+    apiKey,
+    campaignCustomValues(context.production.properties, dealership)
+  );
+  const campaign = await getCampaignByChannelName(context.channelName);
+  if (campaign?.channelId) {
+    await postSlackMessage(
+      campaign.channelId,
+      `GHL Campaign Custom Values have been updated in the *${dealership.dealership_name ?? context.channelName}* subaccount.`
+    );
+  }
   await logRelayAction({ action: "campaign_value_sync", outcome: "success", detail: `${result.updated} values updated; ${result.skipped} skipped.` });
 }
 

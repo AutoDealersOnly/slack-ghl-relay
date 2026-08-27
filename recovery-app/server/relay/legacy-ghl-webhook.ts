@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { logRelayAction } from "./db";
 import { redactErrorDetail } from "./security";
 import { productionWebhookPayloadSchema, type ProductionWebhookPayload } from "./types";
-import { ensureCampaignChannelAndCanvas, refreshProductionCanvas, sendProofStageNotice } from "./workflows";
+import { ensureCampaignChannelAndCanvas, refreshProductionCanvas, sendProofStageNotice, syncCampaignValues } from "./workflows";
 
 /**
  * Parses the exact lightweight payload used by the former Production Update
@@ -112,4 +112,32 @@ export const handleLegacyCreateChannelWebhook = (req: Request, res: Response) =>
         detail: redactErrorDetail(error),
       })
     );
+};
+
+/**
+ * The existing Post Production campaign-value workflow also used a simple
+ * headerless immediate acknowledgment. It sends only a Production name; the
+ * relay reads the current ADO Production and Dealership records and updates
+ * the approved custom values in the linked dealership subaccount.
+ */
+export const handleLegacyCampaignValueSyncWebhook = (req: Request, res: Response) => {
+  res.status(200).send("ok");
+
+  const payload = parseLegacyGhlWebhookPayload(req.body);
+  if (!payload) {
+    void logRelayAction({
+      action: "legacy_campaign_value_sync_webhook",
+      outcome: "skipped",
+      detail: "Legacy campaign-value request did not include a Production name.",
+    });
+    return;
+  }
+
+  void syncCampaignValues(payload).catch(error =>
+    logRelayAction({
+      action: "legacy_campaign_value_sync_webhook",
+      outcome: "failed",
+      detail: redactErrorDetail(error),
+    })
+  );
 };

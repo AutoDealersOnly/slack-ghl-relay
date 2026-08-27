@@ -25,12 +25,14 @@ describe("legacy GHL Canvas-refresh webhook payload", () => {
     expect(parseLegacyGhlWebhookPayload({ channel_name: "2609-abc-test-ame" })).toBeNull();
   });
 
-  it("directs unprotected Canvas, proof, and channel-creation deliveries to their separate legacy handlers", () => {
+  it("directs unprotected Canvas, proof, channel-creation, and campaign-value deliveries to their separate legacy handlers", () => {
     expect(selectLegacyHeaderlessHandler("production_update", false)).toBe("canvas");
     expect(selectLegacyHeaderlessHandler("proof_status", false)).toBe("proof");
     expect(selectLegacyHeaderlessHandler("create_channel", false)).toBe("create");
+    expect(selectLegacyHeaderlessHandler("push_campaign_values", false)).toBe("campaign_values");
     expect(selectLegacyHeaderlessHandler("production_update", true)).toBeNull();
     expect(selectLegacyHeaderlessHandler("proof_status", true)).toBeNull();
     expect(selectLegacyHeaderlessHandler("create_channel", true)).toBeNull();
+    expect(selectLegacyHeaderlessHandler("push_campaign_values", true)).toBeNull();
   });
 });

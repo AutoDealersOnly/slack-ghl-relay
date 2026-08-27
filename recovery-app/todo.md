@@ -92,6 +92,23 @@
 - [x] Provide plain-language steps for creating the single new GHL webhook shared secret and storing it in both protected settings and the private recovery vault.
 - [x] Inventory and classify the newly uploaded prior-conversation recovery archive in plain English before using any item in a future rebuild.
 - [x] Produce a plain-English, read-only catalog of both uploaded recovery archives, including recovered project names, likely purpose, usable files, and instructions not to execute unknown archived code.
+- [x] Restore the ADO Production-to-dealership campaign custom-value updater when a Production record moves to Post Production, using ABC Dealer only for verification.
+- [x] Confirm the exact source and target custom-value keys from the shared documentation before updating any dealership subaccount.
+- [x] Apply the approved campaign field scope only: campaign dates, campaign end date, campaign start date, Ask For, Alias Full Name, Alias First Name, Alias Position, KBB ED, and Event Coordinator.
+- [x] Apply the approved formatting: Month DD start/end values, compact or cross-month campaign date range, start-month-only KBB ED, and mailpiece number(s) as Campaign Theme.
+- [x] Keep Event Coordinator as the combined Production Closer and Greeter values; do not substitute the Dealership Alias.
+- [x] Post a successful campaign-custom-value update confirmation only in the linked campaign Slack channel.
+- [x] Test the complete updater only with the ABC Dealer subaccount and a designated safe Production record before accepting it as restored.
+- [x] Build the updater to target the linked dealership subaccount for every future Production record after the successful ABC test and explicit agency-wide approval.
+- [x] Map Ask For and Alias Full Name to the linked Dealership Alias; map Alias First Name and Alias Position from that same linked Dealership record.
+- [x] Map Event Coordinator only from the Production record’s non-empty Closer and Greeter values; map Campaign Theme from non-empty Mailer and Mailer 2 values separated by ` / `.
+- [x] Update the campaign-sync success message to post only in the linked campaign Slack channel and state that GHL Campaign Custom Values were updated in the dealership subaccount.
+- [x] Restore the former headerless Post Production campaign-sync receiver so the existing workflow needs only its lost destination address replaced.
+- [x] Inspect and reconnect only the existing Push Campaign Custom Values workflow; do not modify the unrelated Post-Production Task Creator workflow.
+- [x] Do not add a temporary ABC Dealer-only campaign-sync safety lock after the successful ABC test and explicit agency-wide activation approval.
+- [x] Add a plain-English Recovery Index to the private Google document that connects each restored function to its purpose, trigger, Slack effect, published endpoint, GitHub repository, recovery branch, backup folder, and rebuild instructions without storing secrets.
+- [ ] Push the activated campaign custom-value updater, its tests, the field map, and the Recovery Index to the company GitHub recovery branch without secrets.
+- [ ] Next restoration: rebuild the Dealership Object to Subaccount Custom Values flow, triggered when an ADO Dealership record moves to VERIFIED, with an update confirmation in GHL New Subaccounts.
 - [ ] Explain the purpose, trigger, data handled, Slack effect, and test plan for each restored automation before configuring or activating it.
 - [x] Restore automatic Slack campaign-channel archiving exactly three days after the related Production record’s event end date.
 - [x] Verify the archive schedule safely in ABC without archiving the active ABC test channel.
