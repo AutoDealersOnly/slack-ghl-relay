@@ -97,11 +97,11 @@
 - [ ] Reschedule or cancel the archived-channel job whenever a Production record’s event end date changes or is cleared.
 - [ ] Change the ABC Production event end date and verify the normal Production-update flow automatically replaces the archive and warning jobs without a manual reschedule request.
 - [ ] Clear an approved safe test record’s event end date and verify the normal Production-update flow automatically cancels its archive and warning jobs.
-- [ ] Identify the original event-end archive trigger without editing the unrelated Production Update GHL to Slack workflow for Closer, Job #(s), Greeter, and PIN Code Ranges.
+- [x] Identify the original event-end archive trigger without editing the unrelated Production Update GHL to Slack workflow for Closer, Job #(s), Greeter, and PIN Code Ranges.
 - [x] Restore the headerless channel-creation receiver required by the existing Create Slack Channel Custom Webhook, preserving its original payload and no-authorization setup.
 - [x] Update only the existing Create Slack Channel Custom Webhook destination after the compatible receiver is published.
 - [x] Visually confirm the saved Create Slack Channel workflow retains POST, Authorization: None, its existing trigger and payload, publication state, and the new relay destination.
-- [ ] Run one safe ABC Create Slack Channel workflow test and confirm it reaches the rebuilt receiver without creating or archiving an unintended Slack channel.
-- [ ] When the Create Slack Channel receiver sees a different current Event End date, replace the existing archive and warning jobs with dates based on that current value.
-- [ ] Reconcile a stale stored archive date against the current Event End date even when the stored Event End value has already been updated.
-- [ ] After each tested and user-confirmed relay restoration, push the updated secret-free source, tests, endpoint map, and recovery instructions to the company GitHub recovery branch.
+- [x] Run one safe ABC Create Slack Channel workflow test and confirm it reaches the rebuilt receiver without creating or archiving an unintended Slack channel.
+- [x] When the Create Slack Channel receiver sees a different current Event End date, replace the existing archive and warning jobs with dates based on that current value.
+- [x] Reconcile a stale stored archive date against the current Event End date even when the stored Event End value has already been updated.
+- [x] After each tested and user-confirmed relay restoration, push the updated secret-free source, tests, endpoint map, and recovery instructions to the company GitHub recovery branch.
