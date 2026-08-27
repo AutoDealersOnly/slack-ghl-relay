@@ -90,8 +90,8 @@
 - [x] Publish the checkpointed relay before changing any external Slack or GoHighLevel endpoint.
 - [ ] Preserve the former known-good GHL Production Message to Slack behavior; change only the lost relay connections needed to restore it.
 - [x] Provide plain-language steps for creating the single new GHL webhook shared secret and storing it in both protected settings and the private recovery vault.
-- [ ] Inventory and classify the newly uploaded prior-conversation recovery archive in plain English before using any item in a future rebuild.
-- [ ] Produce a plain-English, read-only catalog of both uploaded recovery archives, including recovered project names, likely purpose, usable files, and instructions not to execute unknown archived code.
+- [x] Inventory and classify the newly uploaded prior-conversation recovery archive in plain English before using any item in a future rebuild.
+- [x] Produce a plain-English, read-only catalog of both uploaded recovery archives, including recovered project names, likely purpose, usable files, and instructions not to execute unknown archived code.
 - [ ] Explain the purpose, trigger, data handled, Slack effect, and test plan for each restored automation before configuring or activating it.
 - [x] Restore automatic Slack campaign-channel archiving exactly three days after the related Production record’s event end date.
 - [x] Verify the archive schedule safely in ABC without archiving the active ABC test channel.
