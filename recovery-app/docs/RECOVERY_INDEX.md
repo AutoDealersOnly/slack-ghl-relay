@@ -24,6 +24,7 @@ This index connects each operational function to its company GitHub backup and t
 | Channel creation and scheduled archive | **Create Slack Channel** Custom Webhook | `/api/relay/ghl/create_channel` | Creates or reuses the campaign channel and schedules archive exactly three days after Event End. |
 | Campaign custom-value update | **Push Campaign Custom Values** Custom Webhook; Production Status is `post_production` | `/api/relay/ghl/push_campaign_values` | Updates only the approved campaign values in the Production record’s linked dealership subaccount and posts the campaign-channel confirmation. |
 | Dealership-information custom-value update | **Dealership Object to Subaccount Custom Values**; Dealership Status is `VERIFIED` | `/api/relay/ghl/dealership_sync` | Updates the linked subaccount’s dealership-information custom values and posts confirmation in GHL New Subaccounts. Verified in ABC Dealer. |
+| QR Pass Page Builder | ADO GHL custom-menu link | `/qr-pass-builder?access=[private value]` | Selects a dealership and produces four copy-ready QR Pass Page blocks plus the appointment-SMS QR URL. Exact private menu link: private recovery vault only. |
 
 Each destination above is appended to the published relay URL. The Custom Webhooks retain their existing **POST**, body, headers, and authorization behavior unless the function’s recovery guide explicitly says otherwise.
 
@@ -34,3 +35,7 @@ First, open the private recovery-vault Google document and this Recovery Index. 
 Next, create a replacement relay deployment from that folder. Enter the current protected settings from the private vault; do not copy credentials into source files, GitHub, chat, or the status page. Once the replacement has passed its tests, update the one existing Slack command or GoHighLevel Custom Webhook address listed in the table. Test in ABC Dealer before approving broader use.
 
 Finally, document the new published relay URL and the test result in the private recovery-vault Google document. Commit and push the secret-free updated source and recovery instructions to the same GitHub branch before moving to the next automation.
+
+## Future adjustments
+
+Use `FUTURE_CHANGE_PROCEDURE.md` for every requested change to a restored function. It sets the required sequence: start from this index and the private ACTIVE RECOVERY RECORD, make only the requested adjustment, test in ABC Dealer when a live operation is affected, obtain visual confirmation where relevant, update the private record, and push the tested secret-free change to the recovery branch.

@@ -64,6 +64,7 @@ export type DealershipProperties = {
   loc_id?: string;
   verified?: string;
   api_key?: string;
+  qr_pass_page_url?: string;
 };
 
 export type GhlRelation = {

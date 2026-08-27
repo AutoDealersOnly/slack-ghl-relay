@@ -11,6 +11,7 @@ import { serveStatic, setupVite } from "./vite";
 import { relayRouter } from "../relay/routes";
 import { scheduledRelayRouter } from "../relay/scheduled-routes";
 import { slackCommandRouter } from "../relay/slack-commands";
+import { qrPassAccessRouter } from "../relay/qr-pass-access";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -51,6 +52,7 @@ async function startServer() {
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   app.use("/api/relay", relayRouter);
+  app.use("/api/qr-pass", qrPassAccessRouter);
   app.use("/api/scheduled/relay", scheduledRelayRouter);
   // tRPC API
   app.use(
