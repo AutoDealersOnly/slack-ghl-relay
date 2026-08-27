@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1787679458370,
+      "tag": "0000_groovy_felicia_hardy",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1787684247244,
+      "tag": "0001_kind_tinkerer",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1787685141148,
+      "tag": "0002_goofy_living_lightning",
+      "breakpoints": true
+    }
+  ]
+}
