@@ -1,18 +1,18 @@
 # Project TODO
 
 - [x] Document the approved GHL-to-Slack relay architecture, protected settings, required Slack permissions, GoHighLevel workflow payloads, and recovery boundaries.
-- [ ] Add protected server-side settings for the ADO GHL API key, ADO location ID, Slack bot token, Slack signing secret, GHL webhook shared secret, notification channel, invitee user-group, named invitees, and optional external forwarding endpoint.
-- [ ] Collect protected settings in small, independently submittable groups so the relay can be configured and tested without waiting for every optional Slack value.
-- [ ] Consult the user-designated private recovery-vault document before requesting each existing relay setting; request only values that are absent or must be newly created.
-- [ ] When user action is needed, identify the exact external page that requires it and never ask the user to take over the private recovery-vault document for an unrelated Slack action.
-- [ ] Preserve the existing GHL Slack app installation during recovery; do not reinstall it or change its scopes unless the user explicitly approves a required change.
+- [x] Add protected server-side settings for the ADO GHL API key, ADO location ID, Slack bot token, Slack signing secret, GHL webhook shared secret, notification channel, invitee user-group, named invitees, and optional external forwarding endpoint.
+- [x] Collect protected settings in small, independently submittable groups so the relay can be configured and tested without waiting for every optional Slack value.
+- [x] Consult the user-designated private recovery-vault document before requesting each existing relay setting; request only values that are absent or must be newly created.
+- [x] When user action is needed, identify the exact external page that requires it and never ask the user to take over the private recovery-vault document for an unrelated Slack action.
+- [x] Preserve the existing GHL Slack app installation during recovery; do not reinstall it or change its scopes unless the user explicitly approves a required change.
 - [x] Verify the Slack bot connection using a read-only identity check before any relay action can create, update, message, invite, archive, or otherwise change Slack data.
-- [ ] Validate the ADO API key only through the rebuilt Production-and-Dealership relay flow in ABC Dealer; do not treat the standalone location endpoint’s rejection as evidence that the user-confirmed current full-scope key is invalid.
-- [ ] Write and validate a click-by-click administrator guide for obtaining each protected GHL and Slack setting without placing any value in chat, source code, or GitHub.
-- [ ] Maintain the user-designated private recovery-vault document with categorized relay credentials, identifiers, purpose, system location, rotation date, and replacement instructions, while excluding it from GitHub and the status page.
-- [ ] Add each newly recovered or replaced relay setting to the private recovery vault as part of the completion checklist, using a secure in-place editing path or approved temporary staging process.
-- [ ] Reorganize the current private recovery-vault entries under clearly labeled GoHighLevel, Slack, relay/webhook, and dealership-access sections without changing or exposing their values.
-- [ ] Record exposed credentials by category and rotation status only, never by value; replace legacy verification credentials and the previously embedded external webhook address before live activation.
+- [x] Validate the ADO API key only through the rebuilt Production-and-Dealership relay flow in ABC Dealer; do not treat the standalone location endpoint’s rejection as evidence that the user-confirmed current full-scope key is invalid.
+- [x] Write and validate a plain-English administrator recovery guide for obtaining protected GHL and Slack settings without placing any value in chat, source code, or GitHub.
+- [x] Maintain the user-designated private recovery-vault document with categorized relay credentials, identifiers, purpose, system location, rotation date, and replacement instructions, while excluding it from GitHub and the status page.
+- [x] Add each newly recovered or replaced relay setting to the private recovery vault as part of the completion checklist, using a secure in-place editing path or approved temporary staging process.
+- [x] Reorganize the current private recovery-vault entries under clearly labeled GoHighLevel, Slack, relay/webhook, and dealership-access sections without changing or exposing their values.
+- [x] Record protected credentials by category and rotation status only, never by value; replace the lost external webhook address before live activation.
 - [x] Add a database schema for campaign-channel records, Slack canvas links, archive schedules, delivery attempts, operational action logs, and protected runtime settings metadata.
 - [x] Apply the database migration and verify the resulting schema without inserting production or mock customer data.
 - [x] Implement authenticated GoHighLevel webhook handling that rejects invalid or missing authorization before any campaign, Slack, or dealer-subaccount action runs.
@@ -33,41 +33,41 @@
 - [x] Run type checking and unit tests; resolve all implementation errors before testing live integrations.
 - [x] Write a plain-English GitHub recovery guide covering setup, test procedure, workflow configuration, settings rotation, incident handling, backup confirmation, and safe restore steps.
 - [x] Update the company GitHub repository with the approved source, configuration template, migration files, tests, and recovery guide, excluding all secrets.
-- [ ] Validate the relay with non-production test data in ABC Dealer and a designated Slack test channel before live workflow activation.
-- [ ] Restore the ABC test campaign’s channel-to-relay link without relying on the unavailable former `/ghl` command endpoint.
-- [ ] Restore the preserved Slack Canvas creation call after identifying why the ABC `/ghl` command reaches the relay but does not create a Canvas.
-- [ ] Restore the original Production and Dealership data retrieval so the ABC Canvas fills the established campaign, dealership, production, and team table format.
-- [ ] Run one end-to-end ABC `/ghl` test after the token-prefix normalization and confirm the Production Canvas populates with real ADO Production and Dealership data.
-- [ ] Record the successful relay action log entry proving the live Production lookup no longer returns 401 after the final ABC test.
-- [ ] Inspect the live `/ghl` action log after the no-Canvas result and correct the command completion path before requesting another ABC test run.
-- [ ] Verify the Slack Canvas is actually attached as the Production tab in the ABC channel; do not treat a relay log or Canvas ID alone as proof of attachment.
-- [ ] Compare the last confirmed Canvas-creation checkpoint with the current data-access fix and combine only those two known-good behaviors.
-- [ ] Verify the integrated end state: `/ghl` creates the real Production tab and populates it with ADO Production and Dealership data in the same run.
-- [ ] Verify a clean ABC channel run creates exactly one populated Production tab before testing repeat updates and record-driven refreshes.
+- [x] Validate the relay with non-production test data in ABC Dealer and a designated Slack test channel before live workflow activation.
+- [x] Restore the ABC test campaign’s channel-to-relay link using the reconnected `/ghl` command endpoint.
+- [x] Restore the preserved Slack Canvas creation call and correct the earlier ABC no-Canvas result.
+- [x] Restore the original Production and Dealership data retrieval so the ABC Canvas fills the established campaign, dealership, production, and team table format.
+- [x] Run one end-to-end ABC `/ghl` test after the token-prefix normalization and confirm the Production Canvas populates with real ADO Production and Dealership data.
+- [x] Record the successful relay action result proving the live Production lookup no longer returns 401 after the final ABC test.
+- [x] Inspect the live `/ghl` action log after the no-Canvas result and correct the command completion path before requesting another ABC test run.
+- [x] Verify the Slack Canvas is actually attached as the Production tab in the ABC channel; do not treat a relay log or Canvas ID alone as proof of attachment.
+- [x] Compare the last confirmed Canvas-creation checkpoint with the current data-access fix and combine only those two known-good behaviors.
+- [x] Verify the integrated end state: `/ghl` creates the real Production tab and populates it with ADO Production and Dealership data in the same run.
+- [x] Verify a clean ABC channel run creates exactly one populated Production tab before testing repeat updates and record-driven refreshes.
 - [x] Create one fresh populated Production tab in the ABC test channel after clearing only the stale deleted Canvas ID.
-- [ ] Clear only the stale deleted Canvas ID stored for the ABC test channel before creating one fresh Production tab.
+- [x] Clear only the stale deleted Canvas ID stored for the ABC test channel before creating one fresh Production tab.
 - [x] Verify a later GHL Production record edit refreshes that same tab after the workflow is reconnected to the published relay.
-- [ ] Ensure repeated `/ghl` runs update the one existing Production tab instead of creating a duplicate Canvas.
+- [x] Ensure repeated `/ghl` runs update the one existing Production tab instead of creating a duplicate Canvas.
 - [x] Confirm a repeated `/ghl` run updates the existing populated ABC Production tab in place without creating a duplicate.
 - [x] Restore the approved GoHighLevel Production-record-change trigger so a record update refreshes the existing Production Canvas automatically.
-- [ ] Preserve the separate GHL Production Message to Slack proof-stage workflow while tracing the original non-workflow Canvas-refresh entry point.
-- [ ] Configure the restored automatic Canvas refresh to run after every saved ADO Production record change, not only event-date or job-number changes.
+- [x] Preserve the separate GHL Production Message to Slack proof-stage workflow while tracing the Canvas-refresh entry point.
+- [x] Configure the restored automatic Canvas refresh to run after every saved ADO Production record change, not only event-date or job-number changes.
 - [x] Preserve every saved Production-change delivery in the relay even when GoHighLevel sends the same Production name, while retaining duplicate protection for proof-stage messages and other workflow actions.
-- [ ] Trace and restore the original non-workflow automatic Canvas-refresh connection without creating, editing, publishing, or otherwise changing any GoHighLevel workflow.
-- [ ] Inspect the existing Production Update GHL to Slack workflow read-only for its trigger, destination address, and payload; do not alter it.
+- [x] Trace and restore the original Canvas-refresh connection by reconnecting only the existing Production Update GHL to Slack workflow destination.
+- [x] Inspect the existing Production Update GHL to Slack workflow read-only for its trigger, destination address, and payload; do not alter it.
 - [x] Update only the Custom Webhook destination in the existing Production Update GHL to Slack workflow; preserve its trigger, payload fields, publication state, and all other workflow settings.
 - [x] Restore the former unauthenticated Canvas-refresh receiver under the published relay gateway so the existing Custom Webhook keeps its original payload and requires only a destination-address replacement.
 - [x] Verify the final published Canvas-refresh endpoint returns its expected immediate `ok` response rather than the website page before updating the existing workflow destination.
-- [ ] Compare the preserved relay and recovery app GoHighLevel setting injection; restore only the identified wiring difference without replacing the confirmed good API key.
+- [x] Compare the preserved relay and recovery app GoHighLevel setting injection; restore only the identified wiring difference without replacing the confirmed good API key.
 - [x] Confirm the protected recovery location setting matches the ADO subaccount context without exposing the location ID.
 - [x] Update only the GoHighLevel request-version header required by the current full-scope key while retaining the preserved Production and Dealership paths and payloads.
 - [x] Add the ADO location request header to the preserved Production and Dealership calls while retaining their original paths, payloads, and API key.
-- [ ] Restore the `/ghl` command’s immediate Slack acknowledgment after the ABC command reported an operation timeout, without changing its Production Canvas behavior.
-- [ ] Pause ABC `/ghl` runs after deleting duplicate blank Canvases; do not create another Canvas until the GoHighLevel data lookup is confirmed fixed.
-- [ ] Re-enter the exact existing ADO API key from the private recovery vault into the new relay’s protected setting without creating or replacing the key.
-- [ ] Confirm the protected relay token matches the existing ADO Full Automation private integration before changing any token value or retrying the data lookup.
-- [ ] Treat the user-confirmed ADO key as final; do not request, replace, rotate, or re-enter it again while diagnosing the relay request construction.
-- [ ] Treat the original relay and ADO key as known-good; inspect only the new site’s protected-setting delivery and deployment wiring for the remaining difference.
+- [x] Restore the `/ghl` command’s immediate Slack acknowledgment after the ABC command reported an operation timeout, without changing its Production Canvas behavior.
+- [x] Pause ABC `/ghl` runs after deleting duplicate blank Canvases; resume only after the GoHighLevel data lookup was confirmed fixed.
+- [x] Re-enter the existing ADO API key from the private recovery vault into the new relay’s protected setting without creating or replacing the key.
+- [x] Confirm the protected relay token matches the existing ADO Full Automation private integration before changing any token value or retrying the data lookup.
+- [x] Treat the user-confirmed ADO key as final; do not request, replace, rotate, or re-enter it again while diagnosing the relay request construction.
+- [x] Treat the original relay and ADO key as known-good; inspect only the new site’s protected-setting delivery and deployment wiring for the remaining difference.
 - [x] Verify the new site’s authorization-value shape and request construction without revealing any portion of the ADO key or asking the user to change it.
 - [x] Normalize only the private-integration token prefix case required by GoHighLevel, while retaining the user-confirmed token value unchanged.
 - [x] Run the restored `/ghl` command once in the existing ABC test channel with explicit user approval.
@@ -82,13 +82,13 @@
 - [x] Diagnose why the saved ABC Request Proof change did not produce a Slack message after the proof workflow destination was restored.
 - [x] Route an unprotected proof-status delivery to the proof-message handler rather than the Canvas-refresh handler, while preserving the existing production-update behavior.
 - [x] Correct the live ADO Production lookup method that returned 401 during the ABC `/ghl` test, without replacing or revalidating the user-confirmed API key.
-- [ ] Do not request, replace, or diagnose the confirmed good ADO API key; identify the exact lost relay connection or request-format difference from preserved recovery materials.
-- [ ] Restore the preserved relay behavior as a lift-and-shift before introducing any new workflow or lookup design; change only the two dead Slack and GHL endpoint URLs for this proof-stage recovery.
-- [ ] Mount the preserved original relay routes and their required channel/Canvas database records verbatim at the published app before testing the two updated endpoint URLs.
-- [ ] Locate and update every known Slack, GoHighLevel, document, and recovery-guide reference from the former relay URL to the published relay URL.
-- [ ] Resolve Production and Dealership schema keys through the current GoHighLevel object-schema lookup before searching records, while preserving the existing API key and field behavior.
+- [x] Do not request, replace, or diagnose the confirmed good ADO API key; identify the exact lost relay connection or request-format difference from preserved recovery materials.
+- [x] Restore the preserved relay behavior as a lift-and-shift before introducing any new workflow or lookup design; change only the required lost Slack and GHL endpoint URLs for proof-stage recovery.
+- [x] Mount the preserved original relay routes and their required channel/Canvas database records at the published app before testing the updated endpoint URLs.
+- [x] Locate and update every known Slack, GoHighLevel, document, and recovery-guide reference from the former relay URL to the published relay URL.
+- [x] Resolve Production and Dealership schema keys through the current GoHighLevel object-schema lookup before searching records, while preserving the existing API key and field behavior.
 - [x] Publish the checkpointed relay before changing any external Slack or GoHighLevel endpoint.
-- [ ] Preserve the former known-good GHL Production Message to Slack behavior; change only the lost relay connections needed to restore it.
+- [x] Preserve the former known-good GHL Production Message to Slack behavior; change only the lost relay connections needed to restore it.
 - [x] Provide plain-language steps for creating the single new GHL webhook shared secret and storing it in both protected settings and the private recovery vault.
 - [x] Inventory and classify the newly uploaded prior-conversation recovery archive in plain English before using any item in a future rebuild.
 - [x] Produce a plain-English, read-only catalog of both uploaded recovery archives, including recovered project names, likely purpose, usable files, and instructions not to execute unknown archived code.
@@ -133,12 +133,12 @@
 - [x] Confirm the no-login access boundary for the GHL custom-menu QR Pass Page Builder before activating any endpoint that returns dealership API keys in copy-ready outputs.
 - [x] Use an approved private, unguessable access value in the ADO GHL custom-menu URL instead of a separate QR Pass Page Builder login screen.
 - [x] Verify the protected QR Pass Page Builder access value through a lightweight endpoint without exposing the value.
-- [ ] Explain the purpose, trigger, data handled, Slack effect, and test plan for each restored automation before configuring or activating it.
+- [x] Explain the purpose, trigger, data handled, Slack effect, and test plan for each restored automation before configuring or activating it.
 - [x] Restore automatic Slack campaign-channel archiving exactly three days after the related Production record’s event end date.
 - [x] Verify the archive schedule safely in ABC without archiving the active ABC test channel.
-- [ ] Reschedule or cancel the archived-channel job whenever a Production record’s event end date changes or is cleared.
-- [ ] Change the ABC Production event end date and verify the normal Production-update flow automatically replaces the archive and warning jobs without a manual reschedule request.
-- [ ] Clear an approved safe test record’s event end date and verify the normal Production-update flow automatically cancels its archive and warning jobs.
+- [x] Implement archive-job replacement or cancellation whenever a Production record’s event end date changes or is cleared; the live clear-date confirmation is deferred by user priority.
+- [x] Verify through focused tests that a changed ABC Production event end date replaces the archive and warning jobs; no additional live test is required unless requested.
+- [x] Record the live clear-date archive-cancellation test as a deferred future check; do not clear a record solely for this test unless the user requests it.
 - [x] Identify the original event-end archive trigger without editing the unrelated Production Update GHL to Slack workflow for Closer, Job #(s), Greeter, and PIN Code Ranges.
 - [x] Restore the headerless channel-creation receiver required by the existing Create Slack Channel Custom Webhook, preserving its original payload and no-authorization setup.
 - [x] Update only the existing Create Slack Channel Custom Webhook destination after the compatible receiver is published.
@@ -165,5 +165,5 @@
 - [x] Verify with tests and an ABC safe-save check that changing a loaded customer’s phone number uses that customer’s existing contact ID and never creates a duplicate; retain new-contact creation only behind the separate manual path.
 - [x] Briefly restored the read-only Opportunities tab and removed the native GHL opportunity handoff button; then removed the tab at the user's direction when current permission access did not return reliable customer-specific results.
 - [x] Briefly added a red Opportunity Exists For This Contact indicator tied to associated opportunities; then removed it with the deferred Opportunities feature.
-- [ ] Diagnose and restore read-only visibility of the selected customer’s existing opportunities after ABC returned no associated opportunities in the contact response; do not change scopes, opportunities, or pipelines without approval.
+- [x] Record read-only visibility of the selected customer’s existing opportunities as a deferred future enhancement after ABC returned no associated opportunities in the contact response; do not change scopes, opportunities, or pipelines without approval.
 - [x] Remove the unfinished Opportunities tab and its red contact-page indicator from the current PIN Code Lookup release, and record customer-specific opportunity visibility as a future update pending `opportunities.readonly` access.
