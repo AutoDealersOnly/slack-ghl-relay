@@ -17,7 +17,13 @@ import {
   joinAndInviteCampaignChannel,
   postSlackMessage,
 } from "./slack";
-import type { DealershipProperties, ProductionProperties, ProductionWebhookPayload, RelayEventType } from "./types";
+import type {
+  DealershipProperties,
+  DealershipWebhookPayload,
+  ProductionProperties,
+  ProductionWebhookPayload,
+  RelayEventType,
+} from "./types";
 
 type ProductionContext = {
   channelName: string;
@@ -148,7 +154,7 @@ export async function sendProofStageNotice(payload: ProductionWebhookPayload) {
   await logRelayAction({ campaignId: campaign.id, action: "proof_stage_notice", outcome: "success", detail: "Proof-stage notice posted to the campaign channel." });
 }
 
-async function resolveDealershipForSync(payload: ProductionWebhookPayload) {
+async function resolveDealershipForCampaignSync(payload: ProductionWebhookPayload) {
   const context = await loadProductionContext(payload);
   if (!context.dealership?.properties) throw new Error("Production record has no related Dealership record");
   const dealership = context.dealership.properties;
@@ -158,15 +164,33 @@ async function resolveDealershipForSync(payload: ProductionWebhookPayload) {
   return { context, dealership, locationId, apiKey };
 }
 
-export async function syncDealershipValues(payload: ProductionWebhookPayload) {
-  const { context, dealership, locationId, apiKey } = await resolveDealershipForSync(payload);
+async function resolveDealershipForVerifiedSync(payload: DealershipWebhookPayload) {
+  if (payload.verified?.trim().toLowerCase() !== "verified") {
+    throw new Error("Dealership record is not verified");
+  }
+  const record = await fetchDealership(payload.record_id);
+  if (!record?.properties) throw new Error("ADO Dealership record was not found");
+  const dealership = record.properties;
+  const locationId = dealership.loc_id?.trim();
+  const apiKey = dealership.api_key?.trim();
+  if (!locationId || !apiKey) throw new Error("Dealership record does not have the required location ID and API key");
+  return { dealership, locationId, apiKey };
+}
+
+export async function syncDealershipValues(payload: DealershipWebhookPayload) {
+  const { dealership, locationId, apiKey } = await resolveDealershipForVerifiedSync(payload);
   const result = await syncCustomValues(locationId, apiKey, dealershipCustomValues(dealership));
-  await postOptionalNotification(`Dealership values synced for *${dealership.dealership_name ?? context.channelName}*: ${result.updated} updated, ${result.skipped} skipped.`);
+  const notificationChannelId = getRelayConfig().slackNotificationChannelId;
+  if (!notificationChannelId) throw new Error("GHL New Subaccounts notification channel is not configured");
+  await postSlackMessage(
+    notificationChannelId,
+    `Dealership Custom Values have been updated in *${dealership.dealership_name ?? "the linked dealership"}*. Please review.`
+  );
   await logRelayAction({ action: "dealership_value_sync", outcome: "success", detail: `${result.updated} values updated; ${result.skipped} skipped.` });
 }
 
 export async function syncCampaignValues(payload: ProductionWebhookPayload) {
-  const { context, dealership, locationId, apiKey } = await resolveDealershipForSync(payload);
+  const { context, dealership, locationId, apiKey } = await resolveDealershipForCampaignSync(payload);
   const result = await syncCustomValues(
     locationId,
     apiKey,
@@ -182,28 +206,31 @@ export async function syncCampaignValues(payload: ProductionWebhookPayload) {
   await logRelayAction({ action: "campaign_value_sync", outcome: "success", detail: `${result.updated} values updated; ${result.skipped} skipped.` });
 }
 
-export async function handleRelayWorkflow(eventType: RelayEventType, payload: ProductionWebhookPayload): Promise<void> {
+export async function handleRelayWorkflow(
+  eventType: RelayEventType,
+  payload: ProductionWebhookPayload | DealershipWebhookPayload
+): Promise<void> {
   switch (eventType) {
     case "create_channel":
-      await ensureCampaignChannelAndCanvas(payload);
+      await ensureCampaignChannelAndCanvas(payload as ProductionWebhookPayload);
       return;
     case "production_update":
-      await refreshProductionCanvas(payload);
+      await refreshProductionCanvas(payload as ProductionWebhookPayload);
       return;
     case "proof_status":
-      await sendProofStageNotice(payload);
+      await sendProofStageNotice(payload as ProductionWebhookPayload);
       return;
     case "dealership_sync":
-      await syncDealershipValues(payload);
+      await syncDealershipValues(payload as DealershipWebhookPayload);
       return;
     case "push_campaign_values":
-      await syncCampaignValues(payload);
+      await syncCampaignValues(payload as ProductionWebhookPayload);
       return;
     case "cancel_archive":
-      await cancelCampaignArchive(payload.channel_name || normalizeCampaignChannelName(payload.production_name));
+      await cancelCampaignArchive((payload as ProductionWebhookPayload).channel_name || normalizeCampaignChannelName((payload as ProductionWebhookPayload).production_name));
       return;
     case "reschedule_archive":
-      await rescheduleCampaignArchive(payload.channel_name || normalizeCampaignChannelName(payload.production_name));
+      await rescheduleCampaignArchive((payload as ProductionWebhookPayload).channel_name || normalizeCampaignChannelName((payload as ProductionWebhookPayload).production_name));
       return;
   }
 }

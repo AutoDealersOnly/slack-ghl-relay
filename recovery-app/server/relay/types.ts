@@ -9,6 +9,13 @@ export const productionWebhookPayloadSchema = z.object({
 
 export type ProductionWebhookPayload = z.infer<typeof productionWebhookPayloadSchema>;
 
+export const dealershipWebhookPayloadSchema = z.object({
+  record_id: z.string().trim().min(1).max(128),
+  verified: z.string().trim().max(128).optional(),
+});
+
+export type DealershipWebhookPayload = z.infer<typeof dealershipWebhookPayloadSchema>;
+
 export const relayEventTypes = [
   "proof_status",
   "production_update",

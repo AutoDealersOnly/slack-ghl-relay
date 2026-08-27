@@ -107,8 +107,15 @@
 - [x] Inspect and reconnect only the existing Push Campaign Custom Values workflow; do not modify the unrelated Post-Production Task Creator workflow.
 - [x] Do not add a temporary ABC Dealer-only campaign-sync safety lock after the successful ABC test and explicit agency-wide activation approval.
 - [x] Add a plain-English Recovery Index to the private Google document that connects each restored function to its purpose, trigger, Slack effect, published endpoint, GitHub repository, recovery branch, backup folder, and rebuild instructions without storing secrets.
-- [ ] Push the activated campaign custom-value updater, its tests, the field map, and the Recovery Index to the company GitHub recovery branch without secrets.
-- [ ] Next restoration: rebuild the Dealership Object to Subaccount Custom Values flow, triggered when an ADO Dealership record moves to VERIFIED, with an update confirmation in GHL New Subaccounts.
+- [x] Push the activated campaign custom-value updater, its tests, the field map, and the Recovery Index to the company GitHub recovery branch without secrets.
+- [x] Restore the Dealership Object to Subaccount Custom Values flow, triggered when an ADO Dealership record moves to VERIFIED, with an update confirmation in GHL New Subaccounts.
+- [x] Restore Dealership Object to Subaccount Custom Values for the ADO Dealership Status is VERIFIED trigger, using ABC Dealer only for its live verification.
+- [x] Confirm its exact dealership-information custom-value mapping and existing GHL New Subaccounts Slack confirmation before changing the current relay or workflow.
+- [x] Reconnect only the existing workflow’s dead Custom Webhook address after the compatible receiver is published and tested.
+- [x] Preserve the recovered dealership-information mapping: dealership name, address, website, tracking numbers, hours, CRM details, Alias values, brand, CRM link, and passcode.
+- [x] Restore the exact GHL New Subaccounts confirmation after a successful VERIFIED dealership sync, using a protected channel setting rather than a hardcoded channel ID.
+- [x] Accept the existing VERIFIED workflow payload containing `record_id` and `verified`, then fetch and update only that exact ADO Dealership record’s linked subaccount.
+- [x] Restore the former headerless dealership-sync receiver so the existing VERIFIED workflow needs only its dead destination address replaced.
 - [ ] Explain the purpose, trigger, data handled, Slack effect, and test plan for each restored automation before configuring or activating it.
 - [x] Restore automatic Slack campaign-channel archiving exactly three days after the related Production record’s event end date.
 - [x] Verify the archive schedule safely in ABC without archiving the active ABC test channel.

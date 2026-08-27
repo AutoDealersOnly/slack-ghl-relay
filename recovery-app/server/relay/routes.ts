@@ -4,12 +4,13 @@ import { getRelayConfig } from "./config";
 import { createWebhookReceipt, finishWebhookReceipt, logRelayAction } from "./db";
 import { makePayloadHash, makeWebhookDeliveryKey } from "./naming";
 import { redactErrorDetail, isAuthorizedGhlWebhook } from "./security";
-import { productionWebhookPayloadSchema, relayEventTypes, type RelayEventType } from "./types";
+import { dealershipWebhookPayloadSchema, productionWebhookPayloadSchema, relayEventTypes, type RelayEventType } from "./types";
 import { handleRelayWorkflow } from "./workflows";
 import { runOncePerWebhook, shouldDeduplicateRelayEvent } from "./idempotency";
 import {
   handleLegacyCampaignValueSyncWebhook,
   handleLegacyCreateChannelWebhook,
+  handleLegacyDealershipSyncWebhook,
   handleLegacyGhlWebhook,
   handleLegacyProofStatusWebhook,
 } from "./legacy-ghl-webhook";
@@ -22,12 +23,13 @@ const isRelayEventType = (value: string): value is RelayEventType =>
 export const selectLegacyHeaderlessHandler = (
   eventType: string,
   authorized: boolean
-): "canvas" | "proof" | "create" | "campaign_values" | null => {
+): "canvas" | "proof" | "create" | "campaign_values" | "dealership_values" | null => {
   if (authorized) return null;
   if (eventType === "production_update") return "canvas";
   if (eventType === "proof_status") return "proof";
   if (eventType === "create_channel") return "create";
   if (eventType === "push_campaign_values") return "campaign_values";
+  if (eventType === "dealership_sync") return "dealership_values";
   return null;
 };
 
@@ -56,13 +58,17 @@ relayRouter.post("/ghl/:eventType", async (req: Request, res: Response) => {
     handleLegacyCampaignValueSyncWebhook(req, res);
     return;
   }
+  if (legacyHandler === "dealership_values") {
+    handleLegacyDealershipSyncWebhook(req, res);
+    return;
+  }
   if (!authorized) {
     res.status(401).json({ error: "Unauthorized relay request" });
     return;
   }
-  const parsed = productionWebhookPayloadSchema.safeParse(req.body);
+  const parsed = (eventType === "dealership_sync" ? dealershipWebhookPayloadSchema : productionWebhookPayloadSchema).safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "Webhook payload is missing a production name" });
+    res.status(400).json({ error: eventType === "dealership_sync" ? "Webhook payload is missing a Dealership record ID" : "Webhook payload is missing a production name" });
     return;
   }
 

@@ -23,7 +23,7 @@ This index connects each operational function to its company GitHub backup and t
 | Proof-stage messages | **GHL Production Message to Slack** Custom Webhook | `/api/relay/ghl/proof_status` | Sends the approved Proof Request, Proofing Needed, Approved to Upload, and Sent to Print messages in the campaign channel. |
 | Channel creation and scheduled archive | **Create Slack Channel** Custom Webhook | `/api/relay/ghl/create_channel` | Creates or reuses the campaign channel and schedules archive exactly three days after Event End. |
 | Campaign custom-value update | **Push Campaign Custom Values** Custom Webhook; Production Status is `post_production` | `/api/relay/ghl/push_campaign_values` | Updates only the approved campaign values in the Production record’s linked dealership subaccount and posts the campaign-channel confirmation. |
-| Dealership-information custom-value update | **Dealership Object to Subaccount Custom Values**; Dealership Status is `VERIFIED` | **Not yet restored** | Future task: update dealership-information custom values and notify GHL New Subaccounts. |
+| Dealership-information custom-value update | **Dealership Object to Subaccount Custom Values**; Dealership Status is `VERIFIED` | `/api/relay/ghl/dealership_sync` | Updates the linked subaccount’s dealership-information custom values and posts confirmation in GHL New Subaccounts. Verified in ABC Dealer. |
 
 Each destination above is appended to the published relay URL. The Custom Webhooks retain their existing **POST**, body, headers, and authorization behavior unless the function’s recovery guide explicitly says otherwise.
 

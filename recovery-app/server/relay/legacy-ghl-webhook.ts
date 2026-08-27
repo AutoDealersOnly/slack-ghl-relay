@@ -1,8 +1,13 @@
 import type { Request, Response } from "express";
 import { logRelayAction } from "./db";
 import { redactErrorDetail } from "./security";
-import { productionWebhookPayloadSchema, type ProductionWebhookPayload } from "./types";
-import { ensureCampaignChannelAndCanvas, refreshProductionCanvas, sendProofStageNotice, syncCampaignValues } from "./workflows";
+import {
+  dealershipWebhookPayloadSchema,
+  productionWebhookPayloadSchema,
+  type DealershipWebhookPayload,
+  type ProductionWebhookPayload,
+} from "./types";
+import { ensureCampaignChannelAndCanvas, refreshProductionCanvas, sendProofStageNotice, syncCampaignValues, syncDealershipValues } from "./workflows";
 
 /**
  * Parses the exact lightweight payload used by the former Production Update
@@ -11,6 +16,12 @@ import { ensureCampaignChannelAndCanvas, refreshProductionCanvas, sendProofStage
  */
 export const parseLegacyGhlWebhookPayload = (value: unknown): ProductionWebhookPayload | null => {
   const parsed = productionWebhookPayloadSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+};
+
+/** Parses the exact record ID and status sent by the existing VERIFIED workflow. */
+export const parseLegacyDealershipWebhookPayload = (value: unknown): DealershipWebhookPayload | null => {
+  const parsed = dealershipWebhookPayloadSchema.safeParse(value);
   return parsed.success ? parsed.data : null;
 };
 
@@ -136,6 +147,33 @@ export const handleLegacyCampaignValueSyncWebhook = (req: Request, res: Response
   void syncCampaignValues(payload).catch(error =>
     logRelayAction({
       action: "legacy_campaign_value_sync_webhook",
+      outcome: "failed",
+      detail: redactErrorDetail(error),
+    })
+  );
+};
+
+/**
+ * The existing Dealership Object to Subaccount Custom Values workflow sends
+ * `record_id` and `verified`. It receives an immediate acknowledgment, then
+ * the relay retrieves and updates only that exact linked dealership subaccount.
+ */
+export const handleLegacyDealershipSyncWebhook = (req: Request, res: Response) => {
+  res.status(200).send("ok");
+
+  const payload = parseLegacyDealershipWebhookPayload(req.body);
+  if (!payload || payload.verified?.trim().toLowerCase() !== "verified") {
+    void logRelayAction({
+      action: "legacy_dealership_sync_webhook",
+      outcome: "skipped",
+      detail: "Legacy dealership-sync request is missing a verified Dealership record ID.",
+    });
+    return;
+  }
+
+  void syncDealershipValues(payload).catch(error =>
+    logRelayAction({
+      action: "legacy_dealership_sync_webhook",
       outcome: "failed",
       detail: redactErrorDetail(error),
     })

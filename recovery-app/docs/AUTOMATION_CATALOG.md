@@ -43,11 +43,11 @@ This catalog is the working map for the relay rebuild. **Nothing in this documen
 
 **Purpose.** Copy approved dealership information from the ADO Dealership record into the correct dealership subaccount.
 
-**Trigger.** A protected dealer-sync workflow webhook or an approved operational action.
+**Trigger.** The existing **Dealership Object to Subaccount Custom Values** workflow sends the ADO Dealership record ID when its Verified value becomes `verified`.
 
-**What the relay does.** It reads the related ADO Dealership record, obtains that dealership's location ID and full-scope key from the record at run time, and updates only the mapped dealership custom values. It records the outcome without storing the dealership key in the relay database or GitHub.
+**What the relay does.** It reads that exact ADO Dealership record, obtains that dealership's location ID and full-scope key from the record at run time, and updates only the mapped dealership custom values. After a successful update, it posts the confirmation in GHL New Subaccounts. It records the outcome without storing the dealership key in the relay database or GitHub. The exact mapping and restore steps are in `DEALERSHIP_CUSTOM_VALUE_SYNC.md`.
 
-**Test plan.** Use ABC Dealer only. Change one designated non-production custom value, run the sync, and confirm that exactly that mapped value updates in ABC Dealer.
+**Test plan.** Use ABC Dealer only. Run the VERIFIED workflow with the existing ABC Dealer Dealership record, confirm the mapped dealership-information values update in ABC Dealer, and confirm one notification appears in GHL New Subaccounts.
 
 ## 5. Campaign Custom-Value Sync
 
