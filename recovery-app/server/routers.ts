@@ -10,6 +10,21 @@ import {
   qrPassAccessInput,
   qrPassPackageInput,
 } from "./relay/qr-pass-builder";
+import {
+  createPinLookupContact,
+  getPinLookupBootstrap,
+  loadPinLookupContact,
+  pinLookupBootstrapInput,
+  pinLookupCreateInput,
+  pinLookupLoadInput,
+  pinLookupPinSearchInput,
+  pinLookupSaveInput,
+  pinLookupTextSearchInput,
+  savePinLookupContact,
+  searchPinCode,
+  searchPinLookupByName,
+  searchPinLookupByPhone,
+} from "./relay/pin-code-lookup";
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -39,6 +54,30 @@ export const appRouter = router({
     dealerships: publicProcedure.input(qrPassAccessInput).query(({ input }) => listQrPassDealerships(input.access)),
     generate: publicProcedure.input(qrPassPackageInput).query(({ input }) =>
       generateQrPassPackage(input.access, input.dealershipId)
+    ),
+  }),
+
+  pinLookup: router({
+    bootstrap: publicProcedure.input(pinLookupBootstrapInput).query(({ input }) =>
+      getPinLookupBootstrap(input.access, input.locationId)
+    ),
+    searchPin: publicProcedure.input(pinLookupPinSearchInput).mutation(({ input }) =>
+      searchPinCode(input.access, input.locationId, input.pin)
+    ),
+    searchPhone: publicProcedure.input(pinLookupTextSearchInput).mutation(({ input }) =>
+      searchPinLookupByPhone(input.access, input.locationId, input.query)
+    ),
+    searchName: publicProcedure.input(pinLookupTextSearchInput).mutation(({ input }) =>
+      searchPinLookupByName(input.access, input.locationId, input.query)
+    ),
+    loadContact: publicProcedure.input(pinLookupLoadInput).mutation(({ input }) =>
+      loadPinLookupContact(input.access, input.locationId, input.contactId)
+    ),
+    saveContact: publicProcedure.input(pinLookupSaveInput).mutation(({ input }) =>
+      savePinLookupContact(input.access, input.locationId, input.contactId, input.form)
+    ),
+    createContact: publicProcedure.input(pinLookupCreateInput).mutation(({ input }) =>
+      createPinLookupContact(input.access, input.locationId, input.pin, input.form)
     ),
   }),
 

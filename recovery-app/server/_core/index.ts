@@ -12,6 +12,7 @@ import { relayRouter } from "../relay/routes";
 import { scheduledRelayRouter } from "../relay/scheduled-routes";
 import { slackCommandRouter } from "../relay/slack-commands";
 import { qrPassAccessRouter } from "../relay/qr-pass-access";
+import { pinCodeLookupAccessRouter } from "../relay/pin-code-lookup-access";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -53,6 +54,7 @@ async function startServer() {
   registerOAuthRoutes(app);
   app.use("/api/relay", relayRouter);
   app.use("/api/qr-pass", qrPassAccessRouter);
+  app.use("/api/pin-code-lookup", pinCodeLookupAccessRouter);
   app.use("/api/scheduled/relay", scheduledRelayRouter);
   // tRPC API
   app.use(

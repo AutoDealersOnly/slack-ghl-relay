@@ -116,6 +116,23 @@
 - [x] Restore the exact GHL New Subaccounts confirmation after a successful VERIFIED dealership sync, using a protected channel setting rather than a hardcoded channel ID.
 - [x] Accept the existing VERIFIED workflow payload containing `record_id` and `verified`, then fetch and update only that exact ADO Dealership record’s linked subaccount.
 - [x] Restore the former headerless dealership-sync receiver so the existing VERIFIED workflow needs only its dead destination address replaced.
+- [x] Push the verified Dealership Object to Subaccount Custom Values receiver, tests, mapping guide, Recovery Index, and ABC verification record to the company GitHub recovery branch without secrets.
+- [x] Restore the internal QR Pass Page Builder as a GHL custom-menu page without a separate entry portal.
+- [x] Preserve four modular QR Pass Page outputs and one appointment-SMS QR URL output, with the staff PIN corrected from 1234 to 2026.
+- [x] Let authorized users select or type-search a dealership, then generate code using only that dealership’s stored location ID, API key, and QR Pass Page URL.
+- [x] Keep dealership keys out of the page interface, browser storage, client-side requests, status dashboard, and GitHub; include them only inside the copy-ready code outputs after an authorized server lookup.
+- [x] Verify the generated ABC Dealer modules and QR URL exactly against the supplied reference, except for the approved 2026 staff PIN correction.
+ - [x] Run a read-only live ABC generator diagnostic that returns no values to the console and makes no GoHighLevel or Slack changes.
+- [x] Add the final published QR Pass Page Builder URL as an ADO GHL custom-menu link and verify it opens correctly from GHL.
+- [x] Store the exact protected QR Pass Page Builder custom-menu URL in the private recovery document so the user can copy it directly without exposing the access value in chat.
+- [x] Remove the QR Pass Page Builder’s Copy all five outputs control while retaining individual copy controls.
+- [x] Replace the QR Pass Page Builder header mark with the supplied ADO logo, shown small and centered above the builder title.
+- [x] Add complete QR Pass Page Builder rebuild instructions to the private recovery document and the secret-free GitHub recovery backup.
+- [x] Record a standard future-change procedure for every restored automation: begin from the Recovery Index, make the smallest requested adjustment, retest the affected flow, update the private record, and push the tested secret-free change to GitHub.
+- [x] Store the exact protected QR Pass Page Builder custom-menu URL in the private recovery document so the user can copy it directly without exposing the access value in chat.
+- [x] Confirm the no-login access boundary for the GHL custom-menu QR Pass Page Builder before activating any endpoint that returns dealership API keys in copy-ready outputs.
+- [x] Use an approved private, unguessable access value in the ADO GHL custom-menu URL instead of a separate QR Pass Page Builder login screen.
+- [x] Verify the protected QR Pass Page Builder access value through a lightweight endpoint without exposing the value.
 - [ ] Explain the purpose, trigger, data handled, Slack effect, and test plan for each restored automation before configuring or activating it.
 - [x] Restore automatic Slack campaign-channel archiving exactly three days after the related Production record’s event end date.
 - [x] Verify the archive schedule safely in ABC without archiving the active ABC test channel.
@@ -130,3 +147,23 @@
 - [x] When the Create Slack Channel receiver sees a different current Event End date, replace the existing archive and warning jobs with dates based on that current value.
 - [x] Reconcile a stale stored archive date against the current Event End date even when the stored Event End value has already been updated.
 - [x] After each tested and user-confirmed relay restoration, push the updated secret-free source, tests, endpoint map, and recovery instructions to the company GitHub recovery branch.
+- [x] Inventory the supplied PIN Code Lookup archive and HTML reference without running archived code, then identify the most complete recoverable version.
+- [x] Restore the PIN Code Lookup Tool as a no-separate-login GHL custom-menu page that can be used independently in every dealership subaccount.
+- [x] Confirm the exact lookup inputs, returned PIN-code information, data source, and any dealership-specific access rules before building the recovered tool.
+- [x] Test the completed PIN Code Lookup Tool in ABC Dealer before adding its recovery record and GitHub backup.
+- [x] Build one protected universal PIN Code Lookup page that receives the active subaccount through the custom-menu `{{location.id}}` value and never exposes a dealership API key in the browser.
+- [x] Restore the recovered PIN search, placeholder fallback, customer editor, vehicle fields, opportunity display, and save-to-GHL behavior behind server-side procedures.
+- [x] Add automated coverage for authorization, subaccount isolation, lookup request validation, and save request validation before the ABC Dealer test.
+- [x] Replace the PIN Code Lookup Opportunities tab with a customer-record Create or Update Opportunity action that shows the current customer opportunities in context.
+- [x] Retire the unavailable in-tool pipeline and opportunity API path after its ABC authorization response, keeping dealership keys protected and using the approved native GHL handoff instead.
+- [x] Do not attempt an in-tool opportunity create or update; the approved native GHL handoff preserves the dealership’s existing pipeline permissions and controls.
+- [x] Remove protected-connection wording from the operator-facing PIN Code Lookup page while preserving the server-side safeguards.
+- [x] Show the active dealership’s name, full address, and hours in a clear bold header at the top of the PIN Code Lookup page.
+- [x] Verify whether HighLevel exposes an active inbound caller’s phone number to a custom-menu page, and implement the most reliable approved Detect Phone Number action without changing the existing call workflow.
+- [x] Resolve the unavailable Create or Update Opportunity pipeline request by replacing it with the approved native GHL handoff; no pipeline or opportunity was changed.
+- [x] Replace the unavailable in-tool opportunity form with an Open Opportunities in GHL action for the already loaded customer, without changing any pipeline or opportunity.
+- [x] Verify with tests and an ABC safe-save check that changing a loaded customer’s phone number uses that customer’s existing contact ID and never creates a duplicate; retain new-contact creation only behind the separate manual path.
+- [x] Briefly restored the read-only Opportunities tab and removed the native GHL opportunity handoff button; then removed the tab at the user's direction when current permission access did not return reliable customer-specific results.
+- [x] Briefly added a red Opportunity Exists For This Contact indicator tied to associated opportunities; then removed it with the deferred Opportunities feature.
+- [ ] Diagnose and restore read-only visibility of the selected customer’s existing opportunities after ABC returned no associated opportunities in the contact response; do not change scopes, opportunities, or pipelines without approval.
+- [x] Remove the unfinished Opportunities tab and its red contact-page indicator from the current PIN Code Lookup release, and record customer-specific opportunity visibility as a future update pending `opportunities.readonly` access.

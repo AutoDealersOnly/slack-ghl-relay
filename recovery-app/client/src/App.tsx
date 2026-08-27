@@ -5,6 +5,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
+import PinCodeLookup from "./pages/PinCodeLookup";
 import QrPassBuilder from "./pages/QrPassBuilder";
 
 function Router() {
@@ -13,6 +14,7 @@ function Router() {
     <Switch>
       <Route path={"/"} component={Home} />
       <Route path={"/qr-pass-builder"} component={QrPassBuilder} />
+      <Route path={"/pin-code-lookup"} component={PinCodeLookup} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />
