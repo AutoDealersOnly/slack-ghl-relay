@@ -167,3 +167,6 @@
 - [x] Briefly added a red Opportunity Exists For This Contact indicator tied to associated opportunities; then removed it with the deferred Opportunities feature.
 - [x] Record read-only visibility of the selected customer’s existing opportunities as a deferred future enhancement after ABC returned no associated opportunities in the contact response; do not change scopes, opportunities, or pipelines without approval.
 - [x] Remove the unfinished Opportunities tab and its red contact-page indicator from the current PIN Code Lookup release, and record customer-specific opportunity visibility as a future update pending `opportunities.readonly` access.
+- [x] Review current Slack campaign channels associated with 2607 or 2608 campaigns and verify each linked GoHighLevel campaign end date before any archive action.
+- [x] Present the exact channels that are at least three days past their verified campaign end date and the planned GHL New Subaccounts confirmation message, then obtain user approval before archiving them.
+- [x] Archive only the user-approved eligible channels, then post one clear confirmation listing the channels actually archived in GHL New Subaccounts without exposing protected credentials or unrelated campaign data.
