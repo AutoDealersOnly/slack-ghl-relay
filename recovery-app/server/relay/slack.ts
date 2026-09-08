@@ -2,6 +2,8 @@ import { getRelayConfig } from "./config";
 
 type SlackResponse<T> = { ok: boolean; error?: string } & T;
 
+export type ActiveSlackCampaignChannel = { id: string; name: string };
+
 const SLACK_API_URL = "https://slack.com/api";
 
 const requireSlackToken = () => {
@@ -137,4 +139,34 @@ export async function archiveSlackChannel(channelId: string): Promise<void> {
   } catch (error) {
     if (!String(error).includes("already_archived")) throw error;
   }
+}
+
+/** Lists only active Slack channels whose normalized names begin with a four-digit campaign number. */
+export async function listActiveCampaignChannels(): Promise<ActiveSlackCampaignChannel[]> {
+  const token = requireSlackToken();
+  const channels: ActiveSlackCampaignChannel[] = [];
+  let cursor = "";
+
+  do {
+    const url = new URL(`${SLACK_API_URL}/conversations.list`);
+    url.searchParams.set("limit", "200");
+    url.searchParams.set("exclude_archived", "true");
+    url.searchParams.set("types", "public_channel,private_channel");
+    if (cursor) url.searchParams.set("cursor", cursor);
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!response.ok) throw new Error(`Slack conversations.list failed with status ${response.status}`);
+    const data = (await response.json()) as SlackResponse<{
+      channels?: Array<{ id?: string; name?: string }>;
+      response_metadata?: { next_cursor?: string };
+    }>;
+    if (!data.ok) throw new Error(`Slack conversations.list failed: ${data.error ?? "unknown error"}`);
+    for (const channel of data.channels ?? []) {
+      const name = channel.name?.trim() ?? "";
+      const id = channel.id?.trim() ?? "";
+      if (id && /^\d{4}-/.test(name)) channels.push({ id, name });
+    }
+    cursor = data.response_metadata?.next_cursor?.trim() ?? "";
+  } while (cursor);
+
+  return channels;
 }

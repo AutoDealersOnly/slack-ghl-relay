@@ -1,4 +1,4 @@
-import { index, int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { boolean, index, int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -104,8 +104,29 @@ export const relaySettingsMetadata = mysqlTable(
   })
 );
 
+/** Durable platform-job record for the daily campaign-archive reconciliation guard. */
+export const relayArchiveReconciliationJobs = mysqlTable(
+  "relay_archive_reconciliation_jobs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    jobKey: varchar("jobKey", { length: 96 }).notNull(),
+    taskUid: varchar("taskUid", { length: 65 }),
+    cronExpression: varchar("cronExpression", { length: 64 }).notNull(),
+    isEnabled: boolean("isEnabled").default(true).notNull(),
+    lastRunAt: timestamp("lastRunAt"),
+    lastSummary: text("lastSummary"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    jobKeyUnique: uniqueIndex("relay_archive_reconciliation_jobs_job_key_unique").on(table.jobKey),
+    taskUidIndex: index("relay_archive_reconciliation_jobs_task_uid_idx").on(table.taskUid),
+  })
+);
+
 export type RelayCampaign = typeof relayCampaigns.$inferSelect;
 export type InsertRelayCampaign = typeof relayCampaigns.$inferInsert;
 export type RelayWebhookReceipt = typeof relayWebhookReceipts.$inferSelect;
 export type RelayActionLog = typeof relayActionLogs.$inferSelect;
 export type RelaySettingMetadata = typeof relaySettingsMetadata.$inferSelect;
+export type RelayArchiveReconciliationJob = typeof relayArchiveReconciliationJobs.$inferSelect;

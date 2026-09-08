@@ -2,7 +2,14 @@ import type { Request, Response } from "express";
 import { Router } from "express";
 import { sdk } from "../_core/sdk";
 import { deleteHeartbeatJob } from "../_core/heartbeat";
-import { getCampaignByScheduledTask, logRelayAction, updateCampaignArchive } from "./db";
+import {
+  getArchiveReconciliationJobByTaskUid,
+  getCampaignByScheduledTask,
+  logRelayAction,
+  recordArchiveReconciliationRun,
+  updateCampaignArchive,
+} from "./db";
+import { reconcileActiveCampaignArchiveRegistrations } from "./archive-reconciliation";
 import { redactErrorDetail } from "./security";
 import { archiveCampaignChannel } from "./workflows";
 import { postSlackMessage } from "./slack";
@@ -66,6 +73,33 @@ scheduledRelayRouter.post("/archive-warning", async (req: Request, res: Response
       await logRelayAction({ campaignId, action: "campaign_archive_warning", outcome: "failed", detail }).catch(() => undefined);
     }
     res.status(500).json({ error: "archive warning failed", detail, timestamp: new Date().toISOString() });
+  }
+});
+
+scheduledRelayRouter.post("/archive-reconcile", async (req: Request, res: Response) => {
+  try {
+    const user = await authenticateCron(req, res);
+    if (!user) return;
+    const job = await getArchiveReconciliationJobByTaskUid(user.taskUid!);
+    if (!job || !job.isEnabled) {
+      res.json({ ok: true, skipped: "unknown_or_disabled_reconciliation_job" });
+      return;
+    }
+    const summary = await reconcileActiveCampaignArchiveRegistrations();
+    await recordArchiveReconciliationRun(user.taskUid!, JSON.stringify(summary));
+    await logRelayAction({
+      action: "campaign_archive_reconciliation",
+      outcome: summary.failed > 0 ? "failed" : "success",
+      detail: `Inspected ${summary.inspected}; scheduled ${summary.scheduled}; overdue for approval ${summary.overdueForApproval}; skipped ${summary.skipped}; failed ${summary.failed}.`,
+    });
+    if (summary.failed > 0) {
+      res.status(500).json({ error: "archive reconciliation had failures", summary, timestamp: new Date().toISOString() });
+      return;
+    }
+    res.json({ ok: true, summary });
+  } catch (error) {
+    const detail = redactErrorDetail(error);
+    res.status(500).json({ error: "archive reconciliation failed", detail, timestamp: new Date().toISOString() });
   }
 });
 

@@ -170,3 +170,12 @@
 - [x] Review current Slack campaign channels associated with 2607 or 2608 campaigns and verify each linked GoHighLevel campaign end date before any archive action.
 - [x] Present the exact channels that are at least three days past their verified campaign end date and the planned GHL New Subaccounts confirmation message, then obtain user approval before archiving them.
 - [x] Archive only the user-approved eligible channels, then post one clear confirmation listing the channels actually archived in GHL New Subaccounts without exposing protected credentials or unrelated campaign data.
+- [x] Audit the full automatic archive lifecycle—campaign registration, job creation, platform trigger, callback authentication, Slack archive result, and database completion state—to identify why no channel has auto-archived since restoration.
+- [x] Add the approved daily reconciliation guard that finds active campaign channels missing a relay registration, restores their schedule state, and preserves the existing three-days-after-Event-End archive-job design.
+- [x] Restore only the confirmed failed automatic archive component, retaining the existing three-days-after-Event-End rule and scheduled callback design.
+- [x] Verify the repaired automatic archive lifecycle with a safe scheduled-job test from registration through completion before using it for any overdue channel.
+- [x] Present the complete verified overdue channel list after repair and obtain approval before running a one-time catch-up archive action.
+- [ ] Record the confirmed systemic repair, any approved catch-up results, and secret-free recovery changes in the private record and company GitHub backup.
+- [x] Trace the apparent end-date mismatch for Beaver Mitsubishi and Fayetteville Kia; the user verified that the ADO Production API `event_end` values are authoritative and both channels were eligible for approved catch-up.
+- [x] Require the reconciliation guard to resolve a channel through an exact normalized Production record match and reject ambiguity before it evaluates an end date.
+- [x] Resume the paused daily archive reconciliation guard after user confirmation that the ADO Production API `event_end` values are authoritative for Beaver Mitsubishi and Fayetteville Kia.

@@ -22,6 +22,13 @@
       "when": 1787685141148,
       "tag": "0002_goofy_living_lightning",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1788870835794,
+      "tag": "0003_brown_sunset_bain",
+      "breakpoints": true
     }
   ]
 }

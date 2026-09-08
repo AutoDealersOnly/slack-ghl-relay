@@ -1,5 +1,11 @@
 import { desc, eq } from "drizzle-orm";
-import { relayActionLogs, relayCampaigns, relaySettingsMetadata, relayWebhookReceipts } from "../../drizzle/schema";
+import {
+  relayActionLogs,
+  relayArchiveReconciliationJobs,
+  relayCampaigns,
+  relaySettingsMetadata,
+  relayWebhookReceipts,
+} from "../../drizzle/schema";
 import { getDb } from "../db";
 
 export type CampaignUpsertInput = {
@@ -159,4 +165,50 @@ export async function getRelayStatusData() {
   ]);
 
   return { campaigns, recentActions, settingsMetadata, databaseAvailable: true };
+}
+
+export const ARCHIVE_RECONCILIATION_JOB_KEY = "daily_archive_reconciliation";
+
+export async function getArchiveReconciliationJobByTaskUid(taskUid: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .select()
+    .from(relayArchiveReconciliationJobs)
+    .where(eq(relayArchiveReconciliationJobs.taskUid, taskUid))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function upsertArchiveReconciliationJob(input: {
+  taskUid: string;
+  cronExpression: string;
+  isEnabled?: boolean;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  await db
+    .insert(relayArchiveReconciliationJobs)
+    .values({
+      jobKey: ARCHIVE_RECONCILIATION_JOB_KEY,
+      taskUid: input.taskUid,
+      cronExpression: input.cronExpression,
+      isEnabled: input.isEnabled ?? true,
+    })
+    .onDuplicateKeyUpdate({
+      set: {
+        taskUid: input.taskUid,
+        cronExpression: input.cronExpression,
+        isEnabled: input.isEnabled ?? true,
+      },
+    });
+}
+
+export async function recordArchiveReconciliationRun(taskUid: string, summary: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  await db
+    .update(relayArchiveReconciliationJobs)
+    .set({ lastRunAt: new Date(), lastSummary: summary.slice(0, 4000) })
+    .where(eq(relayArchiveReconciliationJobs.taskUid, taskUid));
 }

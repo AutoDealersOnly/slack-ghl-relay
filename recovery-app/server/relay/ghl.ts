@@ -1,4 +1,5 @@
 import { getRelayConfig } from "./config";
+import { normalizeCampaignChannelName } from "./naming";
 import type { DealershipProperties, GhlCustomObjectRecord, ProductionProperties } from "./types";
 
 const GHL_BASE_URL = "https://services.leadconnectorhq.com";
@@ -46,7 +47,7 @@ export async function fetchProductionRecord(
     body: JSON.stringify({
       locationId: ghlLocationId,
       page: 1,
-      pageLimit: 1,
+      pageLimit: 100,
       query: searchTerm,
     }),
   });
@@ -54,7 +55,25 @@ export async function fetchProductionRecord(
     response,
     "production lookup"
   );
-  return data.records?.[0] ?? null;
+  return selectExactProductionRecord(data.records ?? [], searchTerm);
+}
+
+/**
+ * Searches can return partial historical matches. The relay must only use the
+ * record whose Production name normalizes exactly to the channel/search term.
+ * Ambiguous exact records are intentionally rejected rather than selecting one
+ * and scheduling an archive from the wrong Event End date.
+ */
+export function selectExactProductionRecord(
+  records: Array<GhlCustomObjectRecord<ProductionProperties>>,
+  searchTerm: string
+): GhlCustomObjectRecord<ProductionProperties> | null {
+  const expectedName = normalizeCampaignChannelName(searchTerm);
+  const exactMatches = records.filter(record => normalizeCampaignChannelName(record.properties.production ?? "") === expectedName);
+  if (exactMatches.length > 1) {
+    throw new Error(`Ambiguous Production record match for ${expectedName}`);
+  }
+  return exactMatches[0] ?? null;
 }
 
 type CustomValue = { id: string; name: string; fieldKey: string; value: string };
