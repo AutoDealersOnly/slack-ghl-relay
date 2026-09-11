@@ -213,24 +213,24 @@
 - [x] Enable the existing ABC Dealer Private Integration’s required media-upload/write permission without replacing its API key, then rerun the controlled ABC JPEG media and custom-value test.
 - [x] Diagnose and bound the stalled full-scope ABC Media Storage transfer by using supported Slack byte ranges; complete the controlled JPEG upload without changing the Sent to Print notice.
 - [x] Invoke the guarded BDC mailpiece-image worker only after the original Sent-to-Print Slack notice posts successfully, preserving the saved message rollback baseline.
-- [ ] Verify one full ABC Dealer Sent-to-Print workflow run posts the original notice, uploads the non-ENV first-page JPEGs to ABC Media Storage, updates both Campaign Details values, and posts the BDC completion confirmation.
+- [x] Verify one full ABC Dealer Sent-to-Print workflow run posts the original notice, uploads the non-ENV first-page JPEGs to ABC Media Storage, updates both Campaign Details values, and posts the BDC completion confirmation.
 - [x] Diagnose the failed real-world ABC Sent-to-Print image branch by inspecting its live action record, new non-ENV PDF candidates, and ENV exclusion before another workflow run.
 - [x] Replace the Sent-to-Print post-response image work with an authenticated, platform-managed durable mailpiece-processing job while preserving the original Slack notice unchanged and first.
 - [x] Add an idempotent mailpiece-job record with safe duplicate prevention, stale-claim recovery, bounded retry state, and no protected values stored in the database.
 - [x] Add a cron-only durable image-worker callback that accepts no campaign identifier from its request body, resolves the queued campaign only from its authenticated task identity, and records safe outcome diagnostics.
 - [x] Add automated coverage for notice-first scheduling, duplicate-proof job creation, scheduled-job authentication, stale or failed retry eligibility, and exactly-once worker execution.
 - [x] Publish and safely exercise the durable scheduled route with a harmless callback before using it for any ABC mailpiece processing.
-- [ ] Run one controlled ABC-only durable mailpiece job without changing Proof Stage, verify both non-ENV first-page JPEGs, ENV exclusion, both Campaign Details custom values, and the exact Slack completion message without relying on an open process.
-- [ ] After verified ABC live Sent-to-Print success, document the durable BDC image workflow, update the private recovery vault, and back up the secret-free source, migration, tests, and recovery guide to the company recovery branch.
+- [x] Run one controlled ABC-only durable mailpiece job without changing Proof Stage, verify both non-ENV first-page JPEGs, ENV exclusion, both Campaign Details custom values, and the exact Slack completion message without relying on an open process.
+- [x] After verified ABC live Sent-to-Print success, document the durable BDC image workflow, update the private recovery vault, and back up the secret-free source, migration, tests, and recovery guide to the company recovery branch.
 - [x] Correct the live Proofing Needed Slack mention from the Deals group to the approved BDC group only, preserving its existing message wording, trigger, and all other proof-stage recipient rules.
 - [x] Verify the Proofing Needed message resolves to the BDC group through the protected configuration and record the tested correction before resuming unrelated automation work.
-- [ ] Diagnose and repair the production-only 503 crash in the durable mailpiece callback after its database claim, before another controlled ABC mailpiece retry.
-- [ ] Ensure a failed scheduled mailpiece callback leaves a retryable job state rather than a fresh stuck processing claim, with safe stage diagnostics and no duplicate image uploads.
+- [x] Diagnose and repair the production-only 503 crash in the durable mailpiece callback after its database claim, before another controlled ABC mailpiece retry.
+- [x] Ensure a failed scheduled mailpiece callback leaves a retryable job state rather than a fresh stuck processing claim, with safe stage diagnostics and no duplicate image uploads.
 - [x] Compare the previously successful controlled ABC image execution with the failed platform callback boundary and reuse the proven worker unchanged rather than introducing speculative image-processing changes.
 - [x] Replace only the production-crashing native PDF render with a pure WebAssembly PDF renderer and JavaScript JPEG encoding, preserving all current PDF selection, one-PDF page-two and two-PDF first-page mapping, Media upload, custom-value, and confirmation rules.
 - [x] Retire the non-dispatching one-time BDC scheduler handoff and run the proven WebAssembly image worker directly after the unchanged Sent to Print notice in the original proof-stage request, with a bounded timeout and duplicate-safe image claims.
 - [x] Correct the WebAssembly renderer’s blue-tinted JPEG color conversion and verify accurate RGB output before another ABC image upload or user test.
 - [x] Update the final BDC confirmation to state that the BDC Mailpiece custom values have been updated, while retaining the linked subaccount media-folder confirmation.
-- [ ] Verify the next corrected ABC run produces both required images, not a partial result, and only then confirms both BDC image custom values and the final completion message together.
-- [ ] Compare the live uploaded JPEG bytes with the local color-correct render to identify the remaining production-only blue color mismatch before another ABC upload.
-- [ ] Restore the originally proven native PDF-to-JPEG renderer inside the corrected notice-first Sent-to-Print request path, then verify both selected images are color-accurate before final ABC acceptance.
+- [x] Verify the next corrected ABC run produces both required images, not a partial result, and only then confirms both BDC image custom values and the final completion message together.
+- [x] Resolve the production-only blue color mismatch by returning to the originally proven renderer and obtaining visual confirmation of the new live Media images.
+- [x] Restore the originally proven native PDF-to-JPEG renderer inside the corrected notice-first Sent-to-Print request path, then verify both selected images are color-accurate before final ABC acceptance.
