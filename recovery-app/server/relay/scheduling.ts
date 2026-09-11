@@ -1,5 +1,13 @@
 import { createHeartbeatJob, deleteHeartbeatJob } from "../_core/heartbeat";
-import { getCampaignByChannelName, updateCampaignArchive } from "./db";
+import {
+  attachMailpieceImageJobTask,
+  claimMailpieceImageJobForScheduling,
+  failMailpieceImageJobScheduling,
+  getCampaignByChannelName,
+  logRelayAction,
+  updateCampaignArchive,
+} from "./db";
+import { redactErrorDetail } from "./security";
 
 export const calculateArchiveDate = (eventEndDate: string): Date | null => {
   const [year, month, day] = eventEndDate.split("-").map(Number);
@@ -10,6 +18,74 @@ export const calculateArchiveDate = (eventEndDate: string): Date | null => {
 
 export const buildExactDateCron = (date: Date): string =>
   `0 0 ${date.getUTCHours()} ${date.getUTCDate()} ${date.getUTCMonth() + 1} *`;
+
+/** Exact one-time minute schedule for prompt work; archive jobs intentionally use whole-hour timing. */
+export const buildExactMinuteDateCron = (date: Date): string =>
+  `0 ${date.getUTCMinutes()} ${date.getUTCHours()} ${date.getUTCDate()} ${date.getUTCMonth() + 1} *`;
+
+/** Schedules the callback on a future full minute so platform registration has time to complete. */
+export const calculateMailpieceJobRunAt = (now = new Date()): Date => {
+  const runAt = new Date(now);
+  runAt.setUTCSeconds(0, 0);
+  runAt.setUTCMinutes(runAt.getUTCMinutes() + 2);
+  return runAt;
+};
+
+/**
+ * Queues the long-running BDC work separately from the GoHighLevel webhook.
+ * The scheduled callback receives no campaign ID; it derives the job solely
+ * from its authenticated platform task identity.
+ */
+export async function enqueueCampaignMailpieceImageJob(campaign: { id: number; channelName: string }): Promise<"scheduled" | "already_queued" | "already_completed"> {
+  const claim = await claimMailpieceImageJobForScheduling(campaign.id);
+  if (!claim.shouldSchedule) {
+    const outcome = claim.job.status === "completed" ? "already_completed" : "already_queued";
+    await logRelayAction({
+      campaignId: campaign.id,
+      action: "bdc_mailpiece_image_job",
+      outcome: "skipped",
+      detail: outcome === "already_completed" ? "A completed BDC mailpiece job already exists for this campaign." : "A BDC mailpiece job is already queued or processing for this campaign.",
+    });
+    return outcome;
+  }
+
+  try {
+    if (claim.priorTaskUid) await deleteHeartbeatJob(claim.priorTaskUid, "").catch(() => undefined);
+    const runAt = calculateMailpieceJobRunAt();
+    const scheduled = await createHeartbeatJob(
+      {
+        name: `relay-mailpiece-images-${claim.job.id}`,
+        cron: buildExactMinuteDateCron(runAt),
+        path: "/api/scheduled/relay/mailpiece-images",
+        method: "POST",
+        description: `Process BDC mailpiece images for #${campaign.channelName}.`,
+      },
+      ""
+    );
+    const attached = await attachMailpieceImageJobTask({ jobId: claim.job.id, taskUid: scheduled.taskUid, scheduledFor: runAt });
+    if (!attached) {
+      await deleteHeartbeatJob(scheduled.taskUid, "").catch(() => undefined);
+      throw new Error("Durable BDC mailpiece image job could not be attached to its scheduling record");
+    }
+    await logRelayAction({
+      campaignId: campaign.id,
+      action: "bdc_mailpiece_image_job",
+      outcome: "success",
+      detail: "Durable BDC mailpiece image job was scheduled after the Sent-to-Print notice.",
+    });
+    return "scheduled";
+  } catch (error) {
+    const detail = redactErrorDetail(error);
+    await failMailpieceImageJobScheduling({ jobId: claim.job.id, detail });
+    await logRelayAction({
+      campaignId: campaign.id,
+      action: "bdc_mailpiece_image_job",
+      outcome: "failed",
+      detail: `BDC mailpiece image job could not be scheduled: ${detail}`,
+    });
+    throw error;
+  }
+}
 
 export const shouldRescheduleArchive = (
   previousEventEndDate: string | null,

@@ -5,15 +5,26 @@ import {
   dealershipCustomValues,
   fetchDealership,
   fetchProductionRecord,
+  appendProductionAutomatedProofLink,
   syncCustomValues,
 } from "./ghl";
 import { normalizeCampaignChannelName } from "./naming";
-import { getCampaignByChannelName, logRelayAction, upsertCampaign } from "./db";
-import { cancelCampaignArchive, rescheduleCampaignArchive, scheduleCampaignArchive, shouldReconcileArchiveSchedule, shouldRescheduleArchive } from "./scheduling";
+import { claimProofPdfAttachment, finishProofPdfAttachment, getCampaignByChannelName, logRelayAction, upsertCampaign } from "./db";
+import {
+  cancelCampaignArchive,
+  rescheduleCampaignArchive,
+  scheduleCampaignArchive,
+  shouldReconcileArchiveSchedule,
+  shouldRescheduleArchive,
+} from "./scheduling";
+import { uploadCampaignMailpieceImages } from "./mailpiece-images";
+import { redactErrorDetail } from "./security";
 import {
   archiveSlackChannel,
   createOrUpdateProductionCanvas,
+  downloadSlackPdf,
   ensureCampaignChannel,
+  getCurrentChannelPdfs,
   joinAndInviteCampaignChannel,
   postSlackMessage,
 } from "./slack";
@@ -110,13 +121,17 @@ const formatProofDate = (value?: string): string => {
   return new Intl.DateTimeFormat("en-US", { month: "numeric", day: "numeric", year: "numeric" }).format(parsed);
 };
 
+const normalizeProofStage = (value: string): string => value.trim().toLowerCase().replace(/\s+/g, "_");
+
+export const isSentToPrintProofStage = (value?: string): boolean => normalizeProofStage(value ?? "") === "sent_to_print";
+
 export const buildProofStageMessage = (
   proofStage: string,
   production: ProductionProperties,
   dealership: DealershipProperties,
   config: ReturnType<typeof getRelayConfig>
 ): string | null => {
-  const stage = proofStage.trim().toLowerCase().replace(/\s+/g, "_");
+  const stage = normalizeProofStage(proofStage);
   const mailpieces = [production.mailer, production.mailer_2].filter(Boolean).join(" / ") || "mail piece not listed";
   const dateRange = `${formatProofDate(production.event_start)} - ${formatProofDate(production.event_end)}`;
   const dealershipName = dealership.dealership_name || "dealership not listed";
@@ -131,12 +146,88 @@ export const buildProofStageMessage = (
   return message && !message.includes("<@>") && !message.includes("^>") ? message : null;
 };
 
+export const buildProofPdfAddedMessage = (fileName: string): string => `*${fileName}* PDF has been added to the production record.`;
+
+export async function postProofNoticeThenProcessMailpieceImages(input: {
+  isSentToPrint: boolean;
+  postNotice: () => Promise<void>;
+  logNotice: () => Promise<void>;
+  processMailpieceImages: () => Promise<void>;
+  logMailpieceProcessingFailure: (error: unknown) => Promise<void>;
+}): Promise<void> {
+  await input.postNotice();
+  await input.logNotice();
+  if (!input.isSentToPrint) return;
+  try {
+    await input.processMailpieceImages();
+  } catch (error) {
+    await input.logMailpieceProcessingFailure(error);
+  }
+}
+
+export async function appendCurrentChannelPdfsToProduction(input: {
+  campaign: { id: number; channelId: string | null };
+  production: ProductionContext["production"];
+}) {
+  if (!input.campaign.channelId) return;
+  if (!input.production.id) throw new Error("Production record does not have an ID");
+  let files: Awaited<ReturnType<typeof getCurrentChannelPdfs>> = [];
+  try {
+    files = await getCurrentChannelPdfs(input.campaign.channelId);
+    if (files.length === 0) {
+      await logRelayAction({ campaignId: input.campaign.id, action: "sent_to_print_pdf", outcome: "skipped", detail: "No qualifying PDF was found in the linked campaign channel." });
+      return;
+    }
+    let automatedProofLinks = input.production.properties.automated_proof_links;
+    const attachedNames: string[] = [];
+
+    for (const file of files) {
+      const claimed = await claimProofPdfAttachment({ campaignId: input.campaign.id, slackFileId: file.id });
+      if (!claimed) continue;
+      try {
+        const bytes = await downloadSlackPdf(file);
+        const automatedProof = await appendProductionAutomatedProofLink({
+          recordId: input.production.id,
+          existingLinks: automatedProofLinks,
+          fileName: file.name,
+          bytes,
+        });
+        automatedProofLinks = automatedProof.links;
+        await finishProofPdfAttachment({ campaignId: input.campaign.id, slackFileId: file.id, status: "attached", ghlFileUrl: automatedProof.url });
+        attachedNames.push(file.name);
+        try {
+          await postSlackMessage(input.campaign.channelId, buildProofPdfAddedMessage(file.name));
+        } catch (error) {
+          await logRelayAction({ campaignId: input.campaign.id, action: "sent_to_print_pdf", outcome: "failed", detail: `PDF was attached but its channel confirmation could not be posted: ${redactErrorDetail(error)}` });
+        }
+      } catch (error) {
+        await finishProofPdfAttachment({ campaignId: input.campaign.id, slackFileId: file.id, status: "failed" });
+        await logRelayAction({ campaignId: input.campaign.id, action: "sent_to_print_pdf", outcome: "failed", detail: `PDF attachment failed before Automated Proof Links changed: ${redactErrorDetail(error)}` });
+      }
+    }
+
+    if (attachedNames.length > 0) {
+      await logRelayAction({ campaignId: input.campaign.id, action: "sent_to_print_pdf", outcome: "success", detail: `${attachedNames.length} current channel PDF link(s) were appended to Automated Proof Links.` });
+    } else {
+      await logRelayAction({ campaignId: input.campaign.id, action: "sent_to_print_pdf", outcome: "skipped", detail: "All qualifying channel PDFs were already linked, processing, or failed individually; Automated Proof Links was left unchanged." });
+    }
+  } catch (error) {
+    await logRelayAction({
+      campaignId: input.campaign.id,
+      action: "sent_to_print_pdf",
+      outcome: "failed",
+      detail: `Channel PDF selection failed before attachment: ${redactErrorDetail(error)}`,
+    });
+  }
+}
+
 export async function sendProofStageNotice(payload: ProductionWebhookPayload) {
   const context = await loadProductionContext(payload);
   const campaign = await getCampaignByChannelName(context.channelName);
   const config = getRelayConfig();
+  const proofStage = payload.proof_stage ?? context.production.properties.proof_stage ?? "";
   const message = buildProofStageMessage(
-    payload.proof_stage ?? context.production.properties.proof_stage ?? "",
+    proofStage,
     context.production.properties,
     context.dealership?.properties ?? {},
     config
@@ -150,8 +241,21 @@ export async function sendProofStageNotice(payload: ProductionWebhookPayload) {
     });
     return;
   }
-  await postSlackMessage(campaign.channelId, message);
-  await logRelayAction({ campaignId: campaign.id, action: "proof_stage_notice", outcome: "success", detail: "Proof-stage notice posted to the campaign channel." });
+  await postProofNoticeThenProcessMailpieceImages({
+    isSentToPrint: isSentToPrintProofStage(proofStage),
+    postNotice: () => postSlackMessage(campaign.channelId!, message),
+    logNotice: () => logRelayAction({ campaignId: campaign.id, action: "proof_stage_notice", outcome: "success", detail: "Proof-stage notice posted to the campaign channel." }),
+    processMailpieceImages: async () => {
+      await uploadCampaignMailpieceImages({ campaign, production: context.production });
+    },
+    logMailpieceProcessingFailure: error =>
+      logRelayAction({
+        campaignId: campaign.id,
+        action: "bdc_mailpiece_images",
+        outcome: "failed",
+        detail: `Sent-to-Print notice posted, but BDC mailpiece image processing did not complete: ${redactErrorDetail(error)}`,
+      }),
+  });
 }
 
 async function resolveDealershipForCampaignSync(payload: ProductionWebhookPayload) {

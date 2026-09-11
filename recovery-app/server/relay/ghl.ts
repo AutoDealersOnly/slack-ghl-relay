@@ -27,6 +27,30 @@ async function readJson<T>(response: Response, action: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function readGhlWriteResponse<T>(response: Response, action: string): Promise<T> {
+  if (response.ok) return (await response.json()) as T;
+  let suffix = "";
+  try {
+    const body = (await response.json()) as { message?: unknown; error?: unknown; code?: unknown; errors?: unknown };
+    const safeText = (value: unknown): string => {
+      if (typeof value === "string") return value;
+      if (Array.isArray(value)) return value.filter(item => typeof item === "string").join("; ");
+      if (value && typeof value === "object") {
+        return Object.entries(value)
+          .filter(([, item]) => typeof item === "string" || Array.isArray(item))
+          .map(([key, item]) => `${key}: ${safeText(item)}`)
+          .join("; ");
+      }
+      return "";
+    };
+    const detail = safeText(body.message) || safeText(body.errors) || safeText(body.error) || safeText(body.code);
+    if (detail) suffix = `: ${detail.slice(0, 240)}`;
+  } catch {
+    // A non-JSON error body is deliberately not logged because it may echo submitted file data.
+  }
+  throw new Error(`GoHighLevel ${action} failed with status ${response.status}${suffix}`);
+}
+
 export async function fetchDealership(recordId: string): Promise<GhlCustomObjectRecord<DealershipProperties> | null> {
   const { ghlApiKey, ghlLocationId } = requireGhlConfig();
   const response = await fetch(
@@ -76,21 +100,147 @@ export function selectExactProductionRecord(
   return exactMatches[0] ?? null;
 }
 
+export type ProductionProofFile = { url: string; meta: { name: string; extension: string; size: number } };
+
+/** The object schema stays in the endpoint path; the FILE_UPLOAD writer accepts an array of media URLs. */
+export const buildProductionProofUpdatePayload = (proofFiles: ProductionProofFile[]) => ({
+  properties: { proof: proofFiles.map(file => file.url) },
+});
+
+export const productionProofExtension = (fileName: string): string => {
+  const suffix = fileName.split(".").pop()?.trim().toLowerCase() || "pdf";
+  return `.${suffix}`;
+};
+
+export const buildAutomatedProofLinksUpdatePayload = (links: string) => ({
+  properties: { automated_proof_links: links },
+});
+
+export const appendAutomatedProofLink = (existingLinks: string | undefined, fileName: string, url: string, now = new Date()): string => {
+  const date = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  const entry = `${date} — ${fileName}\n${url}`;
+  return [existingLinks?.trim(), entry].filter(Boolean).join("\n\n");
+};
+
+/** Uploads a PDF into ADO media storage and appends its file descriptor to the Production Proof field. */
+/** Uploads a PDF into ADO media storage and appends its dated URL to Automated Proof Links. */
+export async function appendProductionAutomatedProofLink(input: {
+  recordId: string;
+  existingLinks?: string;
+  fileName: string;
+  bytes: Uint8Array;
+}): Promise<{ url: string; links: string }> {
+  const { ghlApiKey, ghlLocationId } = requireGhlConfig();
+  if (input.bytes.byteLength > 25 * 1024 * 1024) throw new Error("PDF exceeds the 25 MB GoHighLevel media limit");
+  const fileBuffer = input.bytes.buffer.slice(
+    input.bytes.byteOffset,
+    input.bytes.byteOffset + input.bytes.byteLength
+  ) as ArrayBuffer;
+  const form = new FormData();
+  form.append("file", new Blob([fileBuffer], { type: "application/pdf" }), input.fileName);
+  form.append("hosted", "false");
+  form.append("name", input.fileName);
+  const uploadResponse = await fetch(`${GHL_BASE_URL}/medias/upload-file`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${ghlApiKey}`, Version: "v3", LocationId: ghlLocationId },
+    body: form,
+  });
+  const upload = await readGhlWriteResponse<{ url?: string }>(uploadResponse, "Proof PDF media upload");
+  if (!upload.url) throw new Error("GoHighLevel media upload returned no file URL");
+  const links = appendAutomatedProofLink(input.existingLinks, input.fileName, upload.url);
+  const updateResponse = await fetch(
+    `${GHL_BASE_URL}/objects/custom_objects.production/records/${encodeURIComponent(input.recordId)}?locationId=${encodeURIComponent(ghlLocationId)}`,
+    {
+      method: "PUT",
+      headers: ghlHeaders(ghlApiKey, "v3", ghlLocationId),
+      body: JSON.stringify(buildAutomatedProofLinksUpdatePayload(links)),
+    }
+  );
+  await readGhlWriteResponse(updateResponse, "Production Automated Proof Links update");
+  return { url: upload.url, links };
+}
+
 type CustomValue = { id: string; name: string; fieldKey: string; value: string };
 
 const normalizeCustomValueKey = (fieldKey: string): string =>
   fieldKey.replace(/\{\{\s*/g, "").replace(/\s*\}\}/g, "").trim();
+
+async function listLocationCustomValues(locationId: string, apiKey: string): Promise<CustomValue[]> {
+  const listResponse = await fetch(`${GHL_BASE_URL}/locations/${encodeURIComponent(locationId)}/customValues`, {
+    headers: ghlHeaders(apiKey, "2021-07-28"),
+  });
+  const listData = await readJson<{ customValues?: CustomValue[] }>(listResponse, "custom-value lookup");
+  return listData.customValues ?? [];
+}
+
+async function updateLocationCustomValue(locationId: string, apiKey: string, value: CustomValue, nextValue: string): Promise<void> {
+  const updateResponse = await fetch(
+    `${GHL_BASE_URL}/locations/${encodeURIComponent(locationId)}/customValues/${encodeURIComponent(value.id)}`,
+    {
+      method: "PUT",
+      headers: ghlHeaders(apiKey, "2021-07-28"),
+      body: JSON.stringify({ name: value.name, value: nextValue }),
+    }
+  );
+  await readJson(updateResponse, "custom-value update");
+}
+
+/** Uploads a JPEG to the associated dealership subaccount's Media library and returns its hosted URL. */
+export async function uploadDealershipMediaImage(input: {
+  locationId: string;
+  apiKey: string;
+  fileName: string;
+  bytes: Uint8Array;
+}): Promise<string> {
+  if (input.bytes.byteLength > 20 * 1024 * 1024) throw new Error("Rendered mailpiece JPEG exceeds the 20 MB media upload limit");
+  const fileBuffer = input.bytes.buffer.slice(input.bytes.byteOffset, input.bytes.byteOffset + input.bytes.byteLength) as ArrayBuffer;
+  const form = new FormData();
+  form.append("file", new Blob([fileBuffer], { type: "image/jpeg" }), input.fileName);
+  form.append("hosted", "false");
+  form.append("name", input.fileName);
+  let response: Response;
+  try {
+    response = await fetch(`${GHL_BASE_URL}/medias/upload-file`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${input.apiKey}`, Version: "v3", LocationId: input.locationId },
+      body: form,
+      signal: AbortSignal.timeout(45_000),
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "TimeoutError") {
+      throw new Error("GoHighLevel dealership media upload timed out after 45 seconds");
+    }
+    throw error;
+  }
+  const upload = await readGhlWriteResponse<{ url?: string }>(response, "dealership mailpiece JPEG upload");
+  if (!upload.url) throw new Error("GoHighLevel media upload returned no image URL");
+  return upload.url;
+}
+
+/** Updates all required campaign image custom values only after confirming every target field exists. */
+export async function syncRequiredCustomValues(locationId: string, apiKey: string, values: Record<string, string>): Promise<void> {
+  const existingValues = await listLocationCustomValues(locationId, apiKey);
+  const updates = Object.entries(values).map(([key, value]) => {
+    const existing = existingValues.find(item => normalizeCustomValueKey(item.fieldKey) === `custom_values.${key}`);
+    if (!existing) throw new Error(`Required dealership custom value ${key} was not found`);
+    return { existing, value };
+  });
+  for (const update of updates) {
+    await updateLocationCustomValue(locationId, apiKey, update.existing, update.value);
+  }
+}
 
 export async function syncCustomValues(
   locationId: string,
   apiKey: string,
   values: Record<string, string>
 ): Promise<{ updated: number; skipped: number }> {
-  const listResponse = await fetch(`${GHL_BASE_URL}/locations/${encodeURIComponent(locationId)}/customValues`, {
-    headers: ghlHeaders(apiKey, "2021-07-28"),
-  });
-  const listData = await readJson<{ customValues?: CustomValue[] }>(listResponse, "custom-value lookup");
-  const existingValues = listData.customValues ?? [];
+  const existingValues = await listLocationCustomValues(locationId, apiKey);
   let updated = 0;
   let skipped = 0;
 
@@ -105,15 +255,7 @@ export async function syncCustomValues(
       continue;
     }
 
-    const updateResponse = await fetch(
-      `${GHL_BASE_URL}/locations/${encodeURIComponent(locationId)}/customValues/${encodeURIComponent(existing.id)}`,
-      {
-        method: "PUT",
-        headers: ghlHeaders(apiKey, "2021-07-28"),
-        body: JSON.stringify({ name: existing.name, value }),
-      }
-    );
-    await readJson(updateResponse, "custom-value update");
+    await updateLocationCustomValue(locationId, apiKey, existing, value);
     updated += 1;
   }
 

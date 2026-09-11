@@ -43,6 +43,8 @@ export type ProductionProperties = {
   closer?: string;
   greeter?: string;
   pin_code_ranges?: string;
+  proof?: Array<{ url: string; meta?: { name?: string; extension?: string; size?: number | string } }>;
+  automated_proof_links?: string;
 };
 
 export type DealershipProperties = {

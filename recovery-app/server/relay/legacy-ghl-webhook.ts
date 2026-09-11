@@ -7,7 +7,19 @@ import {
   type DealershipWebhookPayload,
   type ProductionWebhookPayload,
 } from "./types";
-import { ensureCampaignChannelAndCanvas, refreshProductionCanvas, sendProofStageNotice, syncCampaignValues, syncDealershipValues } from "./workflows";
+import { ensureCampaignChannelAndCanvas, isSentToPrintProofStage, refreshProductionCanvas, sendProofStageNotice, syncCampaignValues, syncDealershipValues } from "./workflows";
+
+const SENT_TO_PRINT_REQUEST_BUDGET_MS = 55_000;
+
+function withinSentToPrintRequestBudget<T>(work: Promise<T>): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const budget = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => reject(new Error("Sent-to-Print BDC image work exceeded the request budget")), SENT_TO_PRINT_REQUEST_BUDGET_MS);
+  });
+  return Promise.race([work, budget]).finally(() => {
+    if (timeout) clearTimeout(timeout);
+  });
+}
 
 /**
  * Parses the exact lightweight payload used by the former Production Update
@@ -63,15 +75,14 @@ export const handleLegacyGhlWebhook = (req: Request, res: Response) => {
 };
 
 /**
- * The existing proof-stage workflow used the same immediate-acknowledgment
- * pattern as the Canvas workflow, but its background task must post the
- * stage-specific Slack notice rather than refresh the Production Canvas.
+ * Non-Sent-to-Print proof stages retain the preserved immediate response.
+ * Sent to Print waits only within a short budget, after its unchanged notice,
+ * so the BDC image worker is not terminated after the response is sent.
  */
-export const handleLegacyProofStatusWebhook = (req: Request, res: Response) => {
-  res.status(200).send("ok");
-
+export const handleLegacyProofStatusWebhook = async (req: Request, res: Response) => {
   const payload = parseLegacyGhlWebhookPayload(req.body);
   if (!payload) {
+    res.status(200).send("ok");
     void logRelayAction({
       action: "legacy_proof_status_webhook",
       outcome: "skipped",
@@ -80,13 +91,28 @@ export const handleLegacyProofStatusWebhook = (req: Request, res: Response) => {
     return;
   }
 
-  void sendProofStageNotice(payload).catch(error =>
-    logRelayAction({
+  if (!isSentToPrintProofStage(payload.proof_stage)) {
+    res.status(200).send("ok");
+    void sendProofStageNotice(payload).catch(error =>
+      logRelayAction({
+        action: "legacy_proof_status_webhook",
+        outcome: "failed",
+        detail: redactErrorDetail(error),
+      })
+    );
+    return;
+  }
+
+  try {
+    await withinSentToPrintRequestBudget(sendProofStageNotice(payload));
+  } catch (error) {
+    await logRelayAction({
       action: "legacy_proof_status_webhook",
       outcome: "failed",
       detail: redactErrorDetail(error),
-    })
-  );
+    }).catch(() => undefined);
+  }
+  res.status(200).send("ok");
 };
 
 /**

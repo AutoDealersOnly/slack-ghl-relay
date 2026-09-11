@@ -29,6 +29,27 @@
       "when": 1788870835794,
       "tag": "0003_brown_sunset_bain",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1788894160686,
+      "tag": "0004_salty_stranger",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1788977855984,
+      "tag": "0005_plain_weapon_omega",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1789135606798,
+      "tag": "0006_cool_ezekiel_stane",
+      "breakpoints": true
     }
   ]
 }

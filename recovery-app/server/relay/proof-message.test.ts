@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildProofStageMessage } from "./workflows";
+import { getRelayConfig } from "./config";
+import { buildProofStageMessage, isSentToPrintProofStage } from "./workflows";
 
 const config = {
   ghlApiKey: "",
@@ -33,5 +34,20 @@ describe("proof-stage messages", () => {
   it("restores the approved-upload and sent-to-print operational wording", () => {
     expect(buildProofStageMessage("Approved to Upload", { job_numbers: "12345" }, {}, config)).toContain("Job #*12345*");
     expect(buildProofStageMessage("Sent to Print", {}, {}, config)).toContain("Uploaded to MBI");
+  });
+
+  it("uses the saved protected BDC group reference while preserving the exact Proofing Needed wording", () => {
+    const configured = getRelayConfig();
+    const message = buildProofStageMessage("Proofing Needed", {}, {}, configured);
+    expect(configured.slackProofingNeededUserGroupId).toBeTruthy();
+    expect(message).toBe(
+      `*📋 Proofing Needed*\n<!subteam^${configured.slackProofingNeededUserGroupId}> proofing needed on the mailpiece(s) above. Thanks!!!`
+    );
+  });
+
+  it("runs BDC mailpiece processing only for sent-to-print stage variations", () => {
+    expect(isSentToPrintProofStage("Sent to Print")).toBe(true);
+    expect(isSentToPrintProofStage("sent_to_print")).toBe(true);
+    expect(isSentToPrintProofStage("Approved to Upload")).toBe(false);
   });
 });

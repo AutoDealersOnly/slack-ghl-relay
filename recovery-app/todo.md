@@ -175,7 +175,62 @@
 - [x] Restore only the confirmed failed automatic archive component, retaining the existing three-days-after-Event-End rule and scheduled callback design.
 - [x] Verify the repaired automatic archive lifecycle with a safe scheduled-job test from registration through completion before using it for any overdue channel.
 - [x] Present the complete verified overdue channel list after repair and obtain approval before running a one-time catch-up archive action.
-- [ ] Record the confirmed systemic repair, any approved catch-up results, and secret-free recovery changes in the private record and company GitHub backup.
+- [x] Record the confirmed systemic repair, approved nine-channel catch-up results, and secret-free recovery changes in the private record and company GitHub backup.
 - [x] Trace the apparent end-date mismatch for Beaver Mitsubishi and Fayetteville Kia; the user verified that the ADO Production API `event_end` values are authoritative and both channels were eligible for approved catch-up.
 - [x] Require the reconciliation guard to resolve a channel through an exact normalized Production record match and reject ambiguity before it evaluates an end date.
 - [x] Resume the paused daily archive reconciliation guard after user confirmation that the ADO Production API `event_end` values are authoritative for Beaver Mitsubishi and Fayetteville Kia.
+- [x] Assess practical GoHighLevel–Slack automation opportunities for ADO’s dealership marketing, BDC, Production, and subaccount operations; prioritize by operating value, risk, and ABC Dealer-first testability.
+- [x] Confirm the exact ADO Production Proof `FILE_UPLOAD` field key and validate Slack channel file access after the existing relay app was granted only the required `files:read` Bot Token Scope.
+- [x] Restore a Sent-to-Print workflow extension that selects the latest qualifying PDF from the exact linked campaign channel and attaches it only to that Production record’s designated file field.
+- [x] Add duplicate, stale-file, wrong-channel, missing-file, oversized-file, and ambiguous-file safeguards before any live test.
+- [x] Investigate the ABC PDF attachment flow with a deliberately selected test PDF; confirmed that HighLevel rejects writes to the Production custom-object Proof FILE_UPLOAD field, so this path was retired rather than activated broadly.
+- [x] Record the unsupported Production Proof FILE_UPLOAD result and retire its source path from the live Sent-to-Print workflow; do not document it as a recovery-ready automation.
+- [x] Record the required Slack `files:read` permission and the failed Proof-field contract investigation in the private recovery guide as a retired approach, without exposing credential values.
+- [x] Exclude the retired Production Proof attachment source and its incomplete migration from the final recovery-ready feature set; retain only its historical troubleshooting record.
+- [x] Preserve all existing files in the Production Proof field and append the selected Slack PDF only if that same Slack file has not already been attached.
+- [x] After a successful attachment, post `*filename* PDF has been added to the production record.` in the exact linked campaign channel; do not post this message on a skipped or failed attachment.
+- [x] Diagnose the ABC Sent-to-Print attachment test where the original Slack notice posted but no Proof update or file-name confirmation occurred; confirmed the custom-object FILE_UPLOAD write limitation and retired that attachment branch.
+- [x] Trace the repeated live Sent-to-Print delivery to identify why the published PDF extension is not reached even though the original proof-stage notice posts, then repair only that discrepancy.
+- [x] Diagnose the failed active-campaign Sent-to-Print PDF attachment without changing the active Production record; confirmed Slack selection/download and media upload, then isolated the unsupported Production Proof file-field update.
+- [x] Change PDF selection from one latest file to every qualifying PDF in the exact linked channel, retaining only the newest version for any files with the same name.
+- [x] Update the success confirmation to name every PDF actually appended to the Production Proof field, while retaining duplicate protection across workflow retries.
+- [x] Identify the exact failed active-campaign attachment handoff; it reached the Production Proof file-field write, which HighLevel rejected for the custom-object FILE_UPLOAD field.
+- [x] Capture the safe repeated Proof-field update error and retire that unsupported attachment path rather than issue further user-triggered Sent to Print tests.
+- [x] Restore the previously verified Sent-to-Print Slack notice after the diagnostic release affected it, and isolate all unfinished attachment work from the notice path.
+- [x] Independently review the complete attachment path and retain only the proven Slack file selection, media upload, and BDC image workflow components.
+- [x] Validate the custom-object file-write limitation through controlled Production update attempts and move the operational goal to supported dealership Media Storage and Campaign Details values.
+- [x] Preserve and label the currently verified original Sent-to-Print Slack notice checkpoint as the rollback baseline before implementing the separate Automated Proof Links field.
+- [x] Create a separate ADO Production `LARGE_TEXT` field named Automated Proof Links through the HighLevel Production object interface, leaving the existing Proof FILE_UPLOAD field unchanged.
+- [x] Use the confirmed `custom_objects.production.automated_proof_links` property in an ABC-only controlled check; it wrote the link but was retired because a LARGE_TEXT field does not provide the required clickable-file experience.
+- [x] Verify the new Automated Proof Links field in ABC Dealer and retire it from the active Sent-to-Print path after the user-confirmed usability review.
+- [x] Build the separate PDF-to-JPEG dealership Media Storage automation from the same proven Slack PDF selection component.
+- [x] Retire the unfinished Automated Proof Links path and leave the existing Production Proof field unchanged, while preserving the named known-good Sent-to-Print message rollback baseline.
+- [x] Select only non-ENV PDF files from the exact linked campaign channel; retain the newest version for each repeated filename and ignore every PDF whose filename contains `ENV`.
+- [x] Convert selected PDF pages to JPEGs and upload them to the associated dealership subaccount’s Media folder using only that Dealership record’s protected location ID and API key.
+- [x] Update `current_mailpiece_image` and `current_mailpiece_image_back` in the associated dealership subaccount’s Campaign Details with the approved one- or two-mailpiece image mapping.
+- [x] Post the exact successful completion message in the linked campaign channel: `BDC Mailpiece images have been uploaded to the *subaccount name* media folder and the custom values have been updated.`
+- [x] Use one consistent non-ENV PDF order and map only the first page of each distinct PDF to the two Campaign Details image values; do not depend on filename order or attempt to represent additional pages.
+- [x] Enable the existing ABC Dealer Private Integration’s required media-upload/write permission without replacing its API key, then rerun the controlled ABC JPEG media and custom-value test.
+- [x] Diagnose and bound the stalled full-scope ABC Media Storage transfer by using supported Slack byte ranges; complete the controlled JPEG upload without changing the Sent to Print notice.
+- [x] Invoke the guarded BDC mailpiece-image worker only after the original Sent-to-Print Slack notice posts successfully, preserving the saved message rollback baseline.
+- [ ] Verify one full ABC Dealer Sent-to-Print workflow run posts the original notice, uploads the non-ENV first-page JPEGs to ABC Media Storage, updates both Campaign Details values, and posts the BDC completion confirmation.
+- [x] Diagnose the failed real-world ABC Sent-to-Print image branch by inspecting its live action record, new non-ENV PDF candidates, and ENV exclusion before another workflow run.
+- [x] Replace the Sent-to-Print post-response image work with an authenticated, platform-managed durable mailpiece-processing job while preserving the original Slack notice unchanged and first.
+- [x] Add an idempotent mailpiece-job record with safe duplicate prevention, stale-claim recovery, bounded retry state, and no protected values stored in the database.
+- [x] Add a cron-only durable image-worker callback that accepts no campaign identifier from its request body, resolves the queued campaign only from its authenticated task identity, and records safe outcome diagnostics.
+- [x] Add automated coverage for notice-first scheduling, duplicate-proof job creation, scheduled-job authentication, stale or failed retry eligibility, and exactly-once worker execution.
+- [x] Publish and safely exercise the durable scheduled route with a harmless callback before using it for any ABC mailpiece processing.
+- [ ] Run one controlled ABC-only durable mailpiece job without changing Proof Stage, verify both non-ENV first-page JPEGs, ENV exclusion, both Campaign Details custom values, and the exact Slack completion message without relying on an open process.
+- [ ] After verified ABC live Sent-to-Print success, document the durable BDC image workflow, update the private recovery vault, and back up the secret-free source, migration, tests, and recovery guide to the company recovery branch.
+- [x] Correct the live Proofing Needed Slack mention from the Deals group to the approved BDC group only, preserving its existing message wording, trigger, and all other proof-stage recipient rules.
+- [x] Verify the Proofing Needed message resolves to the BDC group through the protected configuration and record the tested correction before resuming unrelated automation work.
+- [ ] Diagnose and repair the production-only 503 crash in the durable mailpiece callback after its database claim, before another controlled ABC mailpiece retry.
+- [ ] Ensure a failed scheduled mailpiece callback leaves a retryable job state rather than a fresh stuck processing claim, with safe stage diagnostics and no duplicate image uploads.
+- [x] Compare the previously successful controlled ABC image execution with the failed platform callback boundary and reuse the proven worker unchanged rather than introducing speculative image-processing changes.
+- [x] Replace only the production-crashing native PDF render with a pure WebAssembly PDF renderer and JavaScript JPEG encoding, preserving all current PDF selection, one-PDF page-two and two-PDF first-page mapping, Media upload, custom-value, and confirmation rules.
+- [x] Retire the non-dispatching one-time BDC scheduler handoff and run the proven WebAssembly image worker directly after the unchanged Sent to Print notice in the original proof-stage request, with a bounded timeout and duplicate-safe image claims.
+- [x] Correct the WebAssembly renderer’s blue-tinted JPEG color conversion and verify accurate RGB output before another ABC image upload or user test.
+- [x] Update the final BDC confirmation to state that the BDC Mailpiece custom values have been updated, while retaining the linked subaccount media-folder confirmation.
+- [ ] Verify the next corrected ABC run produces both required images, not a partial result, and only then confirms both BDC image custom values and the final completion message together.
+- [ ] Compare the live uploaded JPEG bytes with the local color-correct render to identify the remaining production-only blue color mismatch before another ABC upload.
+- [ ] Restore the originally proven native PDF-to-JPEG renderer inside the corrected notice-first Sent-to-Print request path, then verify both selected images are color-accurate before final ABC acceptance.

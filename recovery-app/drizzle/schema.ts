@@ -124,9 +124,75 @@ export const relayArchiveReconciliationJobs = mysqlTable(
   })
 );
 
+/** Records each Slack PDF attached to a Production Proof field so webhook retries cannot add it twice. */
+export const relayProofPdfAttachments = mysqlTable(
+  "relay_proof_pdf_attachments",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    campaignId: int("campaignId").notNull(),
+    slackFileId: varchar("slackFileId", { length: 32 }).notNull(),
+    status: mysqlEnum("status", ["processing", "attached", "failed"]).default("processing").notNull(),
+    ghlFileUrl: text("ghlFileUrl"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    campaignFileUnique: uniqueIndex("relay_proof_pdf_campaign_file_unique").on(table.campaignId, table.slackFileId),
+    campaignIndex: index("relay_proof_pdf_campaign_idx").on(table.campaignId),
+  })
+);
+
+/** Records per-page mailpiece image uploads so the same Slack PDF page is never rendered and uploaded twice for one campaign. */
+export const relayMailpieceImageUploads = mysqlTable(
+  "relay_mailpiece_image_uploads",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    campaignId: int("campaignId").notNull(),
+    slackFileId: varchar("slackFileId", { length: 32 }).notNull(),
+    pageNumber: int("pageNumber").notNull(),
+    imageSlot: mysqlEnum("imageSlot", ["front", "back"]).notNull(),
+    status: mysqlEnum("status", ["processing", "uploaded", "failed"]).default("processing").notNull(),
+    mediaUrl: text("mediaUrl"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    campaignFilePageUnique: uniqueIndex("relay_mailpiece_image_campaign_file_page_unique").on(table.campaignId, table.slackFileId, table.pageNumber),
+    campaignIndex: index("relay_mailpiece_image_campaign_idx").on(table.campaignId),
+  })
+);
+
+/** One durable, platform-scheduled mailpiece-processing job per campaign. */
+export const relayMailpieceImageJobs = mysqlTable(
+  "relay_mailpiece_image_jobs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    campaignId: int("campaignId").notNull(),
+    status: mysqlEnum("status", ["pending", "scheduling", "scheduled", "processing", "completed", "failed"])
+      .default("pending")
+      .notNull(),
+    taskUid: varchar("taskUid", { length: 65 }),
+    scheduledFor: timestamp("scheduledFor"),
+    attemptCount: int("attemptCount").default(0).notNull(),
+    startedAt: timestamp("startedAt"),
+    finishedAt: timestamp("finishedAt"),
+    lastError: varchar("lastError", { length: 500 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    campaignUnique: uniqueIndex("relay_mailpiece_image_jobs_campaign_unique").on(table.campaignId),
+    taskUidIndex: index("relay_mailpiece_image_jobs_task_uid_idx").on(table.taskUid),
+    statusIndex: index("relay_mailpiece_image_jobs_status_idx").on(table.status),
+  })
+);
+
 export type RelayCampaign = typeof relayCampaigns.$inferSelect;
 export type InsertRelayCampaign = typeof relayCampaigns.$inferInsert;
 export type RelayWebhookReceipt = typeof relayWebhookReceipts.$inferSelect;
 export type RelayActionLog = typeof relayActionLogs.$inferSelect;
 export type RelaySettingMetadata = typeof relaySettingsMetadata.$inferSelect;
 export type RelayArchiveReconciliationJob = typeof relayArchiveReconciliationJobs.$inferSelect;
+export type RelayProofPdfAttachment = typeof relayProofPdfAttachments.$inferSelect;
+export type RelayMailpieceImageUpload = typeof relayMailpieceImageUploads.$inferSelect;
+export type RelayMailpieceImageJob = typeof relayMailpieceImageJobs.$inferSelect;
