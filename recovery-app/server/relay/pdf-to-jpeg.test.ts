@@ -1,7 +1,7 @@
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import jpeg from "jpeg-js";
 import { describe, expect, it } from "vitest";
-import { buildMailpieceJpegFileName, renderPdfPagesToJpegs } from "./pdf-to-jpeg";
+import { buildMailpieceJpegFileName, getPdfPageCount, renderPdfPagesToJpegs } from "./pdf-to-jpeg";
 
 describe("PDF to JPEG renderer", () => {
   it("renders requested pages from a real two-page PDF as JPEG bytes", async () => {
@@ -22,6 +22,12 @@ describe("PDF to JPEG renderer", () => {
   it("builds durable media-library JPEG filenames", () => {
     expect(buildMailpieceJpegFileName("ABC Mailer Final.PDF", 1)).toBe("ABC-Mailer-Final-page-1.jpg");
   });
+
+  it("counts a one-page PDF before choosing the mailpiece-image plan", async () => {
+    const pdf = await PDFDocument.create();
+    pdf.addPage([240, 180]);
+    await expect(getPdfPageCount(await pdf.save())).resolves.toBe(1);
+  }, 30_000);
 
   it("preserves red artwork without a blue channel swap", async () => {
     const pdf = await PDFDocument.create();

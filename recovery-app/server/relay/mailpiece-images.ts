@@ -1,6 +1,6 @@
 import { fetchDealership, syncRequiredCustomValues, uploadDealershipMediaImage } from "./ghl";
 import { claimMailpieceImageUpload, finishMailpieceImageUpload, logRelayAction } from "./db";
-import { buildMailpieceJpegFileName, renderPdfPagesToJpegs } from "./pdf-to-jpeg";
+import { buildMailpieceJpegFileName, getPdfPageCount, renderPdfPagesToJpegs } from "./pdf-to-jpeg";
 import { downloadSlackPdf, getCurrentChannelMailpiecePdfs, postSlackMessage, type SlackChannelFile } from "./slack";
 import { redactErrorDetail } from "./security";
 import type { GhlCustomObjectRecord, ProductionProperties } from "./types";
@@ -32,6 +32,20 @@ export function buildMailpieceImagePlan(files: SlackChannelFile[]): MailpieceIma
 export const buildBdcMailpieceImagesUpdatedMessage = (subaccountName: string): string =>
   `BDC Mailpiece images have been uploaded to the *${subaccountName}* media folder and the BDC Mailpiece custom values have been updated.`;
 
+export function buildBdcMailpieceImageCustomValues(
+  imageUrls: Partial<Record<MailpieceImageSlot, string>>,
+  singlePageMailpiece: boolean
+) {
+  if (!imageUrls.front) throw new Error("The required front mailpiece image is not available");
+  if (!imageUrls.back && !singlePageMailpiece) {
+    throw new Error("Both required mailpiece images are not available; Campaign Details were left unchanged");
+  }
+  return {
+    current_mailpiece_image: imageUrls.front,
+    current_mailpiece_image_back: imageUrls.back ?? "",
+  };
+}
+
 export async function uploadCampaignMailpieceImages(input: {
   campaign: { id: number; channelId: string | null; dealershipRecordId: string | null };
   production: GhlCustomObjectRecord<ProductionProperties>;
@@ -48,7 +62,17 @@ export async function uploadCampaignMailpieceImages(input: {
 
   await input.onStage?.("slack-file-list");
   const files = await getCurrentChannelMailpiecePdfs(input.campaign.channelId);
-  const plan = buildMailpieceImagePlan(files);
+  const pdfBytesByFileId = new Map<string, Uint8Array>();
+  let singlePageMailpiece = false;
+  if (files.length === 1) {
+    await input.onStage?.("pdf-page-count");
+    const bytes = await downloadSlackPdf(files[0]);
+    pdfBytesByFileId.set(files[0].id, bytes);
+    singlePageMailpiece = (await getPdfPageCount(bytes)) === 1;
+  }
+  const plan = singlePageMailpiece
+    ? [{ file: files[0], pageNumber: 1, slot: "front" as const }]
+    : buildMailpieceImagePlan(files);
   const imageUrls: Partial<Record<MailpieceImageSlot, string>> = {};
 
   for (const item of plan) {
@@ -64,7 +88,8 @@ export async function uploadCampaignMailpieceImages(input: {
     }
     try {
       await input.onStage?.(`pdf-download-${item.slot}`);
-      const pdfBytes = await downloadSlackPdf(item.file);
+      const pdfBytes = pdfBytesByFileId.get(item.file.id) ?? await downloadSlackPdf(item.file);
+      pdfBytesByFileId.set(item.file.id, pdfBytes);
       await input.onStage?.(`pdf-render-${item.slot}`);
       const [jpeg] = await renderPdfPagesToJpegs(pdfBytes, [item.pageNumber]);
       await input.onStage?.(`media-upload-${item.slot}`);
@@ -93,14 +118,9 @@ export async function uploadCampaignMailpieceImages(input: {
     }
   }
 
-  if (!imageUrls.front || !imageUrls.back) {
-    throw new Error("Both required mailpiece images are not available; Campaign Details were left unchanged");
-  }
+  const customValues = buildBdcMailpieceImageCustomValues(imageUrls, singlePageMailpiece);
   await input.onStage?.("custom-values");
-  await syncRequiredCustomValues(locationId, apiKey, {
-    current_mailpiece_image: imageUrls.front,
-    current_mailpiece_image_back: imageUrls.back,
-  });
+  await syncRequiredCustomValues(locationId, apiKey, customValues);
   const subaccountName = dealership?.properties.dealership_name?.trim() || "linked dealership";
   await input.onStage?.("slack-confirmation");
   await postSlackMessage(input.campaign.channelId, buildBdcMailpieceImagesUpdatedMessage(subaccountName));
@@ -110,5 +130,5 @@ export async function uploadCampaignMailpieceImages(input: {
     outcome: "success",
     detail: "Mailpiece JPEGs were uploaded to the linked dealership media library and Campaign Details image values were updated.",
   });
-  return { frontUrl: imageUrls.front, backUrl: imageUrls.back };
+  return { frontUrl: customValues.current_mailpiece_image, backUrl: customValues.current_mailpiece_image_back };
 }

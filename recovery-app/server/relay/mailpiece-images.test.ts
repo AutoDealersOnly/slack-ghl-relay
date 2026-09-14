@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMailpieceImagePlan, buildBdcMailpieceImagesUpdatedMessage } from "./mailpiece-images";
+import { buildBdcMailpieceImageCustomValues, buildMailpieceImagePlan, buildBdcMailpieceImagesUpdatedMessage } from "./mailpiece-images";
 import { selectCurrentChannelMailpiecePdfs } from "./slack";
 
 const channelId = "C_CAMPAIGN";
@@ -28,6 +28,18 @@ describe("BDC mailpiece image planning", () => {
       { pageNumber: 1, slot: "front" },
       { pageNumber: 2, slot: "back" },
     ]);
+  });
+
+  it("sets the front image and intentionally clears the back value for a single-page mailpiece", () => {
+    expect(buildBdcMailpieceImageCustomValues({ front: "https://media.example/front.jpg" }, true)).toEqual({
+      current_mailpiece_image: "https://media.example/front.jpg",
+      current_mailpiece_image_back: "",
+    });
+  });
+
+  it("does not clear the back value for a mailpiece that should have a second image", () => {
+    expect(() => buildBdcMailpieceImageCustomValues({ front: "https://media.example/front.jpg" }, false))
+      .toThrow("Both required mailpiece images are not available");
   });
 
   it("maps the first page of each two-mailpiece PDF to front and back", () => {

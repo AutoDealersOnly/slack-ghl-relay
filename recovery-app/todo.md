@@ -234,3 +234,25 @@
 - [x] Verify the next corrected ABC run produces both required images, not a partial result, and only then confirms both BDC image custom values and the final completion message together.
 - [x] Resolve the production-only blue color mismatch by returning to the originally proven renderer and obtaining visual confirmation of the new live Media images.
 - [x] Restore the originally proven native PDF-to-JPEG renderer inside the corrected notice-first Sent-to-Print request path, then verify both selected images are color-accurate before final ABC acceptance.
+- [x] Preserve the current PIN Code Lookup page and all live OfficeAtHand call-center settings unchanged while building a separate active-call test version.
+- [x] Give the separate Active Call Lookup test page its own protected access value and authorization entry point; do not reuse, edit, open for setup, or depend on the current PIN Code Lookup page or its GHL menu link.
+- [x] Confirm the least-privilege OfficeAtHand event design can receive caller and dialed tracking-number information without using call-control, routing, recording, queue, number, user, or other write access.
+- [x] Prepare a separate test-only PIN Code Lookup route and secure OAuth callback before creating or authorizing the private OfficeAtHand test app.
+- [x] Replace the passive test callback with a state-verified OAuth exchange that stores the private test-app authorization refresh token encrypted at rest and never returns it to the browser, logs, documentation, or GitHub.
+- [x] Confirm the new private OfficeAtHand test-app credentials through a one-time provider request that cannot access, subscribe to, route, record, or change calls before user authorization is requested.
+- [x] Create and connect only a private, read-only OfficeAtHand test app with the minimum approved permissions and no live call-handling changes.
+- [x] Build and test the separate OfficeAtHand webhook receiver, encrypted short-lived active-call storage, and ABC test-board retrieval before creating any provider subscription.
+- [x] Add a protected, explicit dealer-record selector to the separate test page so the ABC-only subscription resolves the chosen ADO Dealership record rather than guessing its display name.
+- [x] Require separate explicit approval before creating one time-limited, ABC tracking-number-only OfficeAtHand call-session subscription; do not use an account-wide or unbounded event filter.
+- [x] Diagnose the rejected ABC Test feed from a status-only provider response, correct only the documented subscription-request defect, and verify the published webhook validation response before one approved retry.
+- [x] Inspect the second rejected ABC Test feed response with credential, phone, URL, IP, and identifier redaction; correct only the remaining documented provider-request defect before any further user click or provider retry.
+- [x] Correct the separate test page’s feed-status display so it reloads and shows the actual active, time-limited ABC-only subscription after a server-side successful start.
+- [x] Read-only investigation: identify the most recent Sent-to-Print run’s qualifying PDF count, page count, image-upload attempts, Campaign Details custom-value writes, and Slack completion result before editing the mailpiece updater.
+- [x] Read-only investigation for 2609 Miracle Toyota P: match the proof-stage event to its linked dealership upload record and identify why the first Media upload received a 401 scope response before changing any code or protected setting.
+- [x] Run the user-approved 2609 Miracle Toyota P image-only retry after the dealership Media permission update; do not change Proof Stage or repeat the original Sent-to-Print notice.
+- [x] Verify the 2609 Miracle Toyota P retry updates the appropriate BDC image value or values and posts the final BDC confirmation only after the image step succeeds.
+- [x] After the one-page rule passes regression tests, run the separately user-approved 2609 Miracle Toyota P image-only retry once more before reporting completion.
+- [x] Add and regression-test the one-page mailpiece rule: upload its first-page front image, explicitly clear the back BDC value, and preserve the existing two-page and two-mailpiece requirements.
+- [ ] Build a read-only active-call list that identifies the dealership from the dialed tracking number and lets an operator choose the call they are answering.
+- [ ] Reuse the existing duplicate-safe PIN/customer lookup and phone-update flow only after an operator selects a call; defer appointment and opportunity writes until their GHL permissions and behavior are separately approved.
+- [ ] Test the separate active-call version in ABC Dealer without changing any live OfficeAtHand call-center configuration, then document and back up the approved test version before any GHL menu-link replacement.

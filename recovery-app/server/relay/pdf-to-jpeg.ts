@@ -13,15 +13,31 @@ type PdfDocument = {
   getPage: (pageNumber: number) => Promise<PdfPage>;
 };
 
+function preparePdfRuntime() {
+  const runtime = globalThis as unknown as Record<string, unknown>;
+  runtime.DOMMatrix ??= DOMMatrix;
+  runtime.ImageData ??= ImageData;
+  runtime.Path2D ??= Path2D;
+}
+
+/** Reads only the page count so a single-page mailpiece can intentionally leave its back image empty. */
+export async function getPdfPageCount(bytes: Uint8Array): Promise<number> {
+  preparePdfRuntime();
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const task = pdfjs.getDocument({ data: new Uint8Array(bytes) });
+  try {
+    return ((await task.promise) as unknown as PdfDocument).numPages;
+  } finally {
+    await task.destroy();
+  }
+}
+
 /**
  * Renders requested PDF pages as JPEGs using the original native prebuilt Node bindings.
  * It deliberately caps dimensions so a large print PDF cannot exhaust the relay.
  */
 export async function renderPdfPagesToJpegs(bytes: Uint8Array, pageNumbers: number[]): Promise<Uint8Array[]> {
-  const runtime = globalThis as unknown as Record<string, unknown>;
-  runtime.DOMMatrix ??= DOMMatrix;
-  runtime.ImageData ??= ImageData;
-  runtime.Path2D ??= Path2D;
+  preparePdfRuntime();
 
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const task = pdfjs.getDocument({ data: new Uint8Array(bytes) });
