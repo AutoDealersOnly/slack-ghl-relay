@@ -256,3 +256,5 @@
 - [ ] Build a read-only active-call list that identifies the dealership from the dialed tracking number and lets an operator choose the call they are answering.
 - [ ] Reuse the existing duplicate-safe PIN/customer lookup and phone-update flow only after an operator selects a call; defer appointment and opportunity writes until their GHL permissions and behavior are separately approved.
 - [ ] Test the separate active-call version in ABC Dealer without changing any live OfficeAtHand call-center configuration, then document and back up the approved test version before any GHL menu-link replacement.
+
+- [x] Document, privately record, and back up the verified one-page BDC mailpiece repair: front image retained or uploaded, back Campaign Details value intentionally cleared, no duplicate Sent-to-Print notice or Proof Stage change, and the approved image-only retry completed.
