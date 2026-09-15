@@ -275,7 +275,7 @@
 - [x] Add durable, secret-free records for the private #super-admin channel and its individual pending archive-control messages, so each button can be rechecked against one current campaign schedule.
 - [x] Add a signed Slack interaction handler that accepts only the Keep Open action from the configured private #super-admin channel and cancels only that matching active archive job.
 - [x] Create and test the private #super-admin Canvas and its pending-archive messages, preserving all existing campaign Canvas, proof-stage, BDC, and archive behavior.
-- [ ] Test the Super Admin setup in the user-created private #super-admin channel after the existing bot is invited and Slack Interactivity is enabled; do not change any other Slack app setting or scope.
+- [x] Test the Super Admin setup in the user-created private #super-admin channel after the existing bot is invited and Slack Interactivity is enabled; do not change any other Slack app setting or scope.
 
 - [x] Create a private Super Admin Slack channel and its Canvas as the plain-language home for approved GHL–Slack and Slack-only automation instructions, without putting protected settings or credentials in Slack.
 - [x] Publish a clear inventory in the Super Admin Canvas stating, for each restored automation, its purpose, normal trigger, what a trusted administrator can safely control, and what remains protected or requires a GHL change.

@@ -28,6 +28,8 @@ The scheduled warning still appears in the affected campaign channel. The Super 
 
 The relay will verify that the Slack request is authentic, verify that the button originated in the saved private Super Admin channel, and re-check that the exact campaign still has that pending archive job. Only then will it cancel that one scheduled archive and change the message to show the channel is being kept open. A repeat click, an expired job, a mismatched campaign, or an action from outside the private channel will make no change.
 
+> **Verified:** The private Super Admin channel, Canvas, and Keep Open button were tested with one temporary far-future schedule in **ABC Test only**. The button cancelled that one temporary schedule and changed its message to kept open. ABC Test was not archived, its Event End date was not changed, and no active campaign channel was used.
+
 Production Canvas repair is disabled in Super Admin. A live staff campaign channel cannot be used to diagnose, test, create, relink, or refresh a Canvas because a second or temporary Canvas would confuse staff. Any future repair design must first be developed and tested in an explicitly approved test-only channel, then separately approved before it is introduced to a live campaign.
 
 ## What still requires a person with the right access
