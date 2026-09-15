@@ -1,0 +1,1 @@
+ALTER TABLE `relay_super_admin_archive_controls` MODIFY COLUMN `status` enum('pending','processing','kept_open','archived','failed') NOT NULL DEFAULT 'pending';

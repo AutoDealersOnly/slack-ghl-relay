@@ -20,6 +20,7 @@ import { archiveCampaignChannel } from "./workflows";
 import { postSlackMessage } from "./slack";
 import { uploadCampaignMailpieceImages } from "./mailpiece-images";
 import { fetchProductionRecord } from "./ghl";
+import { markSuperAdminArchiveCompleted } from "./super-admin";
 
 const scheduledRelayRouter = Router();
 export const ARCHIVE_WARNING_MESSAGE = "This channel is scheduled to archive tomorrow. Contact admin if the campaign needs to remain open.";
@@ -52,6 +53,7 @@ scheduledRelayRouter.post("/archive", async (req: Request, res: Response) => {
     await updateCampaignArchive(campaign.id, { archiveStatus: "archived", archiveTaskUid: null, warningTaskUid: null });
     if (campaign.archiveTaskUid) await deleteHeartbeatJob(campaign.archiveTaskUid, "").catch(() => undefined);
     if (campaign.warningTaskUid) await deleteHeartbeatJob(campaign.warningTaskUid, "").catch(() => undefined);
+    await markSuperAdminArchiveCompleted({ ...campaign, archiveStatus: "scheduled" }).catch(() => undefined);
     res.json({ ok: true, campaign: campaign.channelName });
   } catch (error) {
     const detail = redactErrorDetail(error);

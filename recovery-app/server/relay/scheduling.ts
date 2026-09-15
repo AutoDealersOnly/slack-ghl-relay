@@ -1,4 +1,5 @@
 import { createHeartbeatJob, deleteHeartbeatJob } from "../_core/heartbeat";
+import { cancelScheduledCampaignArchive } from "./archive-jobs";
 import {
   attachMailpieceImageJobTask,
   claimMailpieceImageJobForScheduling,
@@ -148,21 +149,14 @@ export async function scheduleCampaignArchive(channelName: string): Promise<void
     warningTaskUid: warningJob.taskUid,
     archiveStatus: "scheduled",
   });
+  const { syncSuperAdminPendingArchive } = await import("./super-admin");
+  await syncSuperAdminPendingArchive({ ...campaign, archiveAfter, archiveTaskUid: archiveJob.taskUid, warningTaskUid: warningJob.taskUid, archiveStatus: "scheduled" });
 }
 
 export async function cancelCampaignArchive(channelName: string): Promise<void> {
   const campaign = await getCampaignByChannelName(channelName);
   if (!campaign) return;
-  await Promise.all([
-    campaign.archiveTaskUid ? deleteHeartbeatJob(campaign.archiveTaskUid, "") : Promise.resolve(),
-    campaign.warningTaskUid ? deleteHeartbeatJob(campaign.warningTaskUid, "") : Promise.resolve(),
-  ]);
-  await updateCampaignArchive(campaign.id, {
-    archiveTaskUid: null,
-    warningTaskUid: null,
-    archiveAfter: null,
-    archiveStatus: "cancelled",
-  });
+  await cancelScheduledCampaignArchive(campaign);
 }
 
 export async function rescheduleCampaignArchive(channelName: string): Promise<void> {

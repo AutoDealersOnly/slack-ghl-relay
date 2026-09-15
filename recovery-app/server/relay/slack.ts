@@ -16,6 +16,9 @@ export type SlackChannelFile = {
   is_external?: boolean;
 };
 
+export type SlackBlock = Record<string, unknown>;
+export type SlackPostedMessage = { channel: string; ts: string };
+
 const SLACK_API_URL = "https://slack.com/api";
 
 const requireSlackToken = () => {
@@ -101,20 +104,64 @@ async function getAttachedChannelCanvasId(channelId: string): Promise<string | n
   return data.channel?.properties?.canvas?.id ?? null;
 }
 
+/** Read-only check used to verify that Slack still has the Canvas ID saved for a channel. */
+export async function hasMatchingSlackChannelCanvas(channelId: string, expectedCanvasId: string | null): Promise<boolean> {
+  if (!expectedCanvasId) return false;
+  return (await getAttachedChannelCanvasId(channelId)) === expectedCanvasId;
+}
+
+export type SlackChannelInfo = { id: string; name: string; is_private: boolean };
+
+/** Reads only the supplied channel’s identity and privacy flag for one-time Super Admin setup validation. */
+export async function getSlackChannelInfo(channelId: string): Promise<SlackChannelInfo> {
+  const token = requireSlackToken();
+  const response = await fetch(`${SLACK_API_URL}/conversations.info?channel=${encodeURIComponent(channelId)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error(`Slack conversations.info failed with status ${response.status}`);
+  const data = (await response.json()) as SlackResponse<{ channel?: SlackChannelInfo }>;
+  if (!data.ok) throw new Error(`Slack conversations.info failed: ${data.error ?? "unknown error"}`);
+  const channel = data.channel;
+  if (!channel?.id || !channel.name) throw new Error("Slack channel is unavailable.");
+  return channel;
+}
+
+/** Finds one bot-visible channel by its exact name for the deliberate Super Admin setup step. */
+export async function findSlackChannelByName(channelName: string): Promise<SlackChannelInfo | null> {
+  const token = requireSlackToken();
+  let cursor = "";
+  do {
+    const url = new URL(`${SLACK_API_URL}/conversations.list`);
+    url.searchParams.set("limit", "200");
+    url.searchParams.set("types", "public_channel,private_channel");
+    if (cursor) url.searchParams.set("cursor", cursor);
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!response.ok) throw new Error(`Slack conversations.list failed with status ${response.status}`);
+    const data = (await response.json()) as SlackResponse<{
+      channels?: SlackChannelInfo[];
+      response_metadata?: { next_cursor?: string };
+    }>;
+    if (!data.ok) throw new Error(`Slack conversations.list failed: ${data.error ?? "unknown error"}`);
+    const match = data.channels?.find(channel => channel.name === channelName);
+    if (match) return match;
+    cursor = data.response_metadata?.next_cursor?.trim() ?? "";
+  } while (cursor);
+  return null;
+}
+
 export async function createOrUpdateProductionCanvas(
   channelId: string,
   markdown: string,
   existingCanvasId?: string | null
 ): Promise<string> {
   if (existingCanvasId) {
-    try {
+    const attachedCanvasId = await getAttachedChannelCanvasId(channelId);
+    if (attachedCanvasId === existingCanvasId) {
       await slackApi("canvases.edit", {
         canvas_id: existingCanvasId,
         changes: [{ operation: "replace", document_content: { type: "markdown", markdown } }],
       });
       return existingCanvasId;
-    } catch {
-      // A manually deleted or inaccessible canvas is safely replaced below.
     }
   }
   try {
@@ -136,8 +183,54 @@ export async function createOrUpdateProductionCanvas(
   }
 }
 
+/** Creates or refreshes the separate private Super Admin Canvas without affecting campaign Canvases. */
+export async function createOrUpdateSuperAdminCanvas(
+  channelId: string,
+  markdown: string,
+  existingCanvasId?: string | null
+): Promise<string> {
+  if (existingCanvasId) {
+    try {
+      await slackApi("canvases.edit", {
+        canvas_id: existingCanvasId,
+        changes: [{ operation: "replace", document_content: { type: "markdown", markdown } }],
+      });
+      return existingCanvasId;
+    } catch {
+      // A deleted or inaccessible Super Admin Canvas is safely replaced below.
+    }
+  }
+  try {
+    const data = await slackApi<{ canvas_id: string }>("canvases.create", {
+      channel_id: channelId,
+      title: "ADO Super Admin",
+      document_content: { type: "markdown", markdown },
+    });
+    return data.canvas_id;
+  } catch (error) {
+    if (!String(error).includes("channel_canvas_already_exists")) throw error;
+    const canvasId = await getAttachedChannelCanvasId(channelId);
+    if (!canvasId) throw new Error("Existing Super Admin Canvas could not be linked");
+    await slackApi("canvases.edit", {
+      canvas_id: canvasId,
+      changes: [{ operation: "replace", document_content: { type: "markdown", markdown } }],
+    });
+    return canvasId;
+  }
+}
+
 export async function postSlackMessage(channelId: string, text: string): Promise<void> {
   await slackApi("chat.postMessage", { channel: channelId, text });
+}
+
+/** Posts a bot-authored Block Kit control message and returns its Slack message timestamp. */
+export async function postSlackBlocks(channelId: string, text: string, blocks: SlackBlock[]): Promise<SlackPostedMessage> {
+  return slackApi<SlackPostedMessage>("chat.postMessage", { channel: channelId, text, blocks });
+}
+
+/** Updates only a message previously posted by this bot, retaining the private channel context. */
+export async function updateSlackMessage(channelId: string, messageTs: string, text: string, blocks: SlackBlock[]): Promise<void> {
+  await slackApi("chat.update", { channel: channelId, ts: messageTs, text, blocks, as_user: true });
 }
 
 export async function archiveSlackChannel(channelId: string): Promise<void> {

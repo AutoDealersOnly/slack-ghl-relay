@@ -6,6 +6,14 @@ The existing Slack `/ghl` command now creates one real **Production** Canvas tab
 
 The existing **Production Update GHL to Slack** workflow was restored by replacing only its dead Custom Webhook destination. The user then made one controlled saved change to the ABC Production record and visually confirmed that the **same existing Production Canvas updated correctly in place**. No duplicate Canvas was created.
 
+## Renamed-channel Canvas recovery
+
+On 2026-09-15, a campaign channel was first created with a misspelled name and then corrected. The initial `/ghl` run used the original no-record-found fallback. After the name was corrected, `/ghl` found the right Production record, but its saved Canvas link pointed to a Canvas that Slack no longer displayed in that channel.
+
+The relay now verifies that a saved Canvas is still attached to the exact Slack channel before it edits that Canvas. If the saved link is detached, the existing proven Canvas path reuses the channel’s visible Canvas when Slack has one, or creates one only when none exists. This does not alter the Proof Requested relay, any GoHighLevel workflow, the channel itself, or another campaign.
+
+The corrected campaign then received one controlled `/ghl` run. The user visually confirmed that the visible Production Canvas appeared with the complete campaign information. Its secret-free relay action record also recorded a successful Production Canvas refresh.
+
 ## Remaining Verification
 
 The separate **GHL Production Message to Slack** proof-stage workflow must be reconnected and tested independently. It must not change the Canvas-refresh behavior verified above.

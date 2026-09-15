@@ -12,23 +12,43 @@ afterEach(() => {
 describe("Production Canvas linking", () => {
   it("updates a known canvas without creating another one", async () => {
     process.env.SLACK_BOT_TOKEN = "test-token";
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, channel: { properties: { canvas: { id: "F123" } } } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     global.fetch = fetchMock as typeof fetch;
 
     await expect(createOrUpdateProductionCanvas("C123", "# Production", "F123")).resolves.toBe("F123");
-    expect(fetchMock.mock.calls[0]?.[0]).toContain("canvases.edit");
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("conversations.info");
+    expect(fetchMock.mock.calls[1]?.[0]).toContain("canvases.edit");
   });
 
-  it("creates a fresh channel Canvas when the saved Canvas ID was deleted", async () => {
+  it("relinks the Canvas visibly attached to the channel when the saved Canvas link is stale", async () => {
     process.env.SLACK_BOT_TOKEN = "test-token";
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: false, error: "canvas_not_found" }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, canvas_id: "F789" }), { status: 200 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, channel: { properties: { canvas: { id: "F789" } } } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: false, error: "channel_canvas_already_exists" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, channel: { properties: { canvas: { id: "F789" } } } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     global.fetch = fetchMock as typeof fetch;
 
-    await expect(createOrUpdateProductionCanvas("C123", "# Production", "F123")).resolves.toBe("F789");
-    expect(fetchMock.mock.calls[0]?.[0]).toContain("canvases.edit");
+    await expect(createOrUpdateProductionCanvas("C123", "# Production", "F-old")).resolves.toBe("F789");
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("conversations.info");
+    expect(fetchMock.mock.calls[1]?.[0]).toContain("canvases.create");
+    expect(fetchMock.mock.calls[2]?.[0]).toContain("conversations.info");
+    expect(fetchMock.mock.calls[3]?.[0]).toContain("canvases.edit");
+  });
+
+  it("creates a new channel Canvas when the saved link is detached and no visible Canvas exists", async () => {
+    process.env.SLACK_BOT_TOKEN = "test-token";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, channel: { properties: {} } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, canvas_id: "F-new" }), { status: 200 }));
+    global.fetch = fetchMock as typeof fetch;
+
+    await expect(createOrUpdateProductionCanvas("C123", "# Production", "F-old")).resolves.toBe("F-new");
     expect(fetchMock.mock.calls[1]?.[0]).toContain("canvases.create");
   });
 

@@ -267,3 +267,24 @@
 
 - [x] Locate and cancel only the pending ABC Test campaign-channel archive job; do not archive the channel or change any other campaign schedule.
 - [x] Document a real, safe admin procedure for keeping a specific campaign channel open rather than directing staff to a nonexistent operations channel.
+
+- [x] Design a separate Super Admin Slack control channel that lists pending campaign-channel archives and lets an authorized administrator keep one selected campaign channel open without changing any other schedule or relay behavior.
+
+- [x] Use private #super-admin channel membership, verified by the signed Slack interaction’s originating channel, as the administrator gate; do not create or maintain a separate named-user permission list.
+
+- [x] Add durable, secret-free records for the private #super-admin channel and its individual pending archive-control messages, so each button can be rechecked against one current campaign schedule.
+- [x] Add a signed Slack interaction handler that accepts only the Keep Open action from the configured private #super-admin channel and cancels only that matching active archive job.
+- [x] Create and test the private #super-admin Canvas and its pending-archive messages, preserving all existing campaign Canvas, proof-stage, BDC, and archive behavior.
+- [ ] Test the Super Admin setup in the user-created private #super-admin channel after the existing bot is invited and Slack Interactivity is enabled; do not change any other Slack app setting or scope.
+
+- [ ] Create a private Super Admin Slack channel and its Canvas as the plain-language home for approved GHL–Slack and Slack-only automation instructions, without putting protected settings or credentials in Slack.
+- [ ] Publish a clear inventory in the Super Admin Canvas stating, for each restored automation, its purpose, normal trigger, what a trusted administrator can safely control, and what remains protected or requires a GHL change.
+- [x] Build only separately authorized, narrow controls for individual automations, beginning with a selected campaign-channel archive hold; do not create a general-purpose control that can change protected settings, workflows, or unrelated automations.
+
+- [x] Diagnose and minimally restore the missing Production Canvas for 2610 Kia Wesley Chapel without changing its working Proof Requested relay, GoHighLevel workflow, Slack channel, or any other campaign behavior.
+
+- [x] Correct the stale saved-Canvas link condition so `/ghl` verifies that the saved Production Canvas is actually attached to its Slack channel before updating it; create or relink only the visible channel Canvas when it is missing.
+
+- [x] Confirm the corrected 2610 Kia Wesley Chapel channel-name history and its exact saved Slack link before repairing the missing visible Production Canvas.
+
+- [ ] Add a guarded Super Admin Repair Production Canvas control that rechecks one selected channel’s saved Canvas attachment, does nothing if it is healthy, and recreates or relinks only that channel’s visible Production Canvas when detached.

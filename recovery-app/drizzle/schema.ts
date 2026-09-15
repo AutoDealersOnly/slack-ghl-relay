@@ -124,6 +124,43 @@ export const relayArchiveReconciliationJobs = mysqlTable(
   })
 );
 
+/** The one private Slack channel used for Super Admin instructions and approved controls. */
+export const relaySuperAdminChannels = mysqlTable(
+  "relay_super_admin_channels",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    controlKey: varchar("controlKey", { length: 64 }).notNull(),
+    channelId: varchar("channelId", { length: 32 }).notNull(),
+    channelName: varchar("channelName", { length: 128 }).notNull(),
+    canvasId: varchar("canvasId", { length: 32 }),
+    isActive: boolean("isActive").default(true).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    controlKeyUnique: uniqueIndex("relay_super_admin_channels_control_key_unique").on(table.controlKey),
+    channelIdUnique: uniqueIndex("relay_super_admin_channels_channel_id_unique").on(table.channelId),
+  })
+);
+
+/** One bot-authored Keep Open control per campaign archive registration. */
+export const relaySuperAdminArchiveControls = mysqlTable(
+  "relay_super_admin_archive_controls",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    campaignId: int("campaignId").notNull(),
+    superAdminChannelId: varchar("superAdminChannelId", { length: 32 }).notNull(),
+    slackMessageTs: varchar("slackMessageTs", { length: 32 }).notNull(),
+    status: mysqlEnum("status", ["pending", "processing", "kept_open", "archived", "failed"]).default("pending").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    campaignUnique: uniqueIndex("relay_super_admin_archive_controls_campaign_unique").on(table.campaignId),
+    channelStatusIndex: index("relay_super_admin_archive_controls_channel_status_idx").on(table.superAdminChannelId, table.status),
+  })
+);
+
 /** Records each Slack PDF attached to a Production Proof field so webhook retries cannot add it twice. */
 export const relayProofPdfAttachments = mysqlTable(
   "relay_proof_pdf_attachments",
@@ -187,6 +224,64 @@ export const relayMailpieceImageJobs = mysqlTable(
   })
 );
 
+/** Encrypted refresh credential for the separate private OfficeAtHand active-call test app. */
+export const relayOfficeAtHandAuthorizations = mysqlTable(
+  "relay_office_at_hand_authorizations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    connectionKey: varchar("connectionKey", { length: 96 }).notNull(),
+    ownerId: varchar("ownerId", { length: 96 }),
+    refreshTokenCiphertext: text("refreshTokenCiphertext").notNull(),
+    refreshTokenExpiresAt: timestamp("refreshTokenExpiresAt"),
+    grantedScope: varchar("grantedScope", { length: 512 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    connectionKeyUnique: uniqueIndex("relay_office_at_hand_authorizations_connection_key_unique").on(table.connectionKey),
+  })
+);
+
+/** Short-lived encrypted inbound-call data for the separate active-call test board. */
+export const relayOfficeAtHandActiveCalls = mysqlTable(
+  "relay_office_at_hand_active_calls",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    sessionId: varchar("sessionId", { length: 512 }).notNull(),
+    partyId: varchar("partyId", { length: 512 }).notNull(),
+    sequence: int("sequence").notNull(),
+    status: varchar("status", { length: 32 }).notNull(),
+    callerPhoneCiphertext: text("callerPhoneCiphertext").notNull(),
+    dialedPhoneCiphertext: text("dialedPhoneCiphertext").notNull(),
+    receivedAt: timestamp("receivedAt").defaultNow().notNull(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    sessionPartyUnique: uniqueIndex("relay_office_at_hand_active_call_session_party_unique").on(table.sessionId, table.partyId),
+    expiresAtIndex: index("relay_office_at_hand_active_call_expires_at_idx").on(table.expiresAt),
+  })
+);
+
+/** One time-limited provider subscription for the separate ABC active-call test. */
+export const relayOfficeAtHandTestSubscriptions = mysqlTable(
+  "relay_office_at_hand_test_subscriptions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    providerSubscriptionId: varchar("providerSubscriptionId", { length: 128 }).notNull(),
+    dealershipRecordId: varchar("dealershipRecordId", { length: 128 }).notNull(),
+    status: varchar("status", { length: 32 }).notNull(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    providerSubscriptionUnique: uniqueIndex("relay_office_at_hand_test_subscription_provider_unique").on(table.providerSubscriptionId),
+    expiresAtIndex: index("relay_office_at_hand_test_subscription_expires_at_idx").on(table.expiresAt),
+  })
+);
+
 export type RelayCampaign = typeof relayCampaigns.$inferSelect;
 export type InsertRelayCampaign = typeof relayCampaigns.$inferInsert;
 export type RelayWebhookReceipt = typeof relayWebhookReceipts.$inferSelect;
@@ -196,3 +291,6 @@ export type RelayArchiveReconciliationJob = typeof relayArchiveReconciliationJob
 export type RelayProofPdfAttachment = typeof relayProofPdfAttachments.$inferSelect;
 export type RelayMailpieceImageUpload = typeof relayMailpieceImageUploads.$inferSelect;
 export type RelayMailpieceImageJob = typeof relayMailpieceImageJobs.$inferSelect;
+export type RelayOfficeAtHandAuthorization = typeof relayOfficeAtHandAuthorizations.$inferSelect;
+export type RelayOfficeAtHandActiveCall = typeof relayOfficeAtHandActiveCalls.$inferSelect;
+export type RelayOfficeAtHandTestSubscription = typeof relayOfficeAtHandTestSubscriptions.$inferSelect;

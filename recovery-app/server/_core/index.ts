@@ -11,8 +11,11 @@ import { serveStatic, setupVite } from "./vite";
 import { relayRouter } from "../relay/routes";
 import { scheduledRelayRouter } from "../relay/scheduled-routes";
 import { slackCommandRouter } from "../relay/slack-commands";
+import { superAdminSlackInteractionRouter } from "../relay/super-admin-slack-interactions";
 import { qrPassAccessRouter } from "../relay/qr-pass-access";
 import { pinCodeLookupAccessRouter } from "../relay/pin-code-lookup-access";
+import { officeAtHandOAuthRouter } from "../relay/office-at-hand-oauth";
+import { officeAtHandEventsRouter } from "../relay/office-at-hand-events";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -36,6 +39,7 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  app.use("/api/office-at-hand", express.json({ limit: "128kb" }), officeAtHandEventsRouter);
   app.use(
     "/api/slack/commands",
     express.urlencoded({
@@ -47,6 +51,17 @@ async function startServer() {
     }),
     slackCommandRouter
   );
+  app.use(
+    "/api/slack/interactions",
+    express.urlencoded({
+      limit: "1mb",
+      extended: false,
+      verify: (req, _res, buffer) => {
+        (req as express.Request & { rawBody?: string }).rawBody = buffer.toString("utf8");
+      },
+    }),
+    superAdminSlackInteractionRouter
+  );
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -55,6 +70,7 @@ async function startServer() {
   app.use("/api/relay", relayRouter);
   app.use("/api/qr-pass", qrPassAccessRouter);
   app.use("/api/pin-code-lookup", pinCodeLookupAccessRouter);
+  app.use("/api/office-at-hand", officeAtHandOAuthRouter);
   app.use("/api/scheduled/relay", scheduledRelayRouter);
   // tRPC API
   app.use(

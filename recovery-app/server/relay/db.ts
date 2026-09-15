@@ -1,12 +1,17 @@
-import { and, desc, eq, inArray, lt } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, lt } from "drizzle-orm";
 import {
   relayActionLogs,
   relayArchiveReconciliationJobs,
   relayCampaigns,
   relayMailpieceImageJobs,
   relayMailpieceImageUploads,
+  relayOfficeAtHandActiveCalls,
+  relayOfficeAtHandAuthorizations,
+  relayOfficeAtHandTestSubscriptions,
   relayProofPdfAttachments,
   relaySettingsMetadata,
+  relaySuperAdminArchiveControls,
+  relaySuperAdminChannels,
   relayWebhookReceipts,
 } from "../../drizzle/schema";
 import { getDb } from "../db";
@@ -20,6 +25,135 @@ export type CampaignUpsertInput = {
   dealershipName?: string | null;
   eventEndDate?: string | null;
 };
+
+export const OFFICE_AT_HAND_ACTIVE_CALL_CONNECTION_KEY = "active_call_lookup_test";
+export const SUPER_ADMIN_CONTROL_KEY = "super_admin";
+
+/** Stores only encrypted renewable authorization data for the separate test app. */
+export async function saveOfficeAtHandAuthorization(input: {
+  ownerId?: string | null;
+  refreshTokenCiphertext: string;
+  refreshTokenExpiresAt?: Date | null;
+  grantedScope?: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  await db
+    .insert(relayOfficeAtHandAuthorizations)
+    .values({
+      connectionKey: OFFICE_AT_HAND_ACTIVE_CALL_CONNECTION_KEY,
+      ownerId: input.ownerId ?? null,
+      refreshTokenCiphertext: input.refreshTokenCiphertext,
+      refreshTokenExpiresAt: input.refreshTokenExpiresAt ?? null,
+      grantedScope: input.grantedScope ?? null,
+    })
+    .onDuplicateKeyUpdate({
+      set: {
+        ownerId: input.ownerId ?? null,
+        refreshTokenCiphertext: input.refreshTokenCiphertext,
+        refreshTokenExpiresAt: input.refreshTokenExpiresAt ?? null,
+        grantedScope: input.grantedScope ?? null,
+      },
+    });
+}
+
+/** Returns encrypted authorization material only for server-side provider refreshes. */
+export async function getOfficeAtHandAuthorization() {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .select()
+    .from(relayOfficeAtHandAuthorizations)
+    .where(eq(relayOfficeAtHandAuthorizations.connectionKey, OFFICE_AT_HAND_ACTIVE_CALL_CONNECTION_KEY))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** Persists only a short-lived encrypted active-call record for the separate test board. */
+export async function upsertOfficeAtHandActiveCall(input: {
+  sessionId: string;
+  partyId: string;
+  sequence: number;
+  status: string;
+  callerPhoneCiphertext: string;
+  dialedPhoneCiphertext: string;
+  expiresAt: Date;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  const existing = await db
+    .select({ id: relayOfficeAtHandActiveCalls.id, sequence: relayOfficeAtHandActiveCalls.sequence })
+    .from(relayOfficeAtHandActiveCalls)
+    .where(and(eq(relayOfficeAtHandActiveCalls.sessionId, input.sessionId), eq(relayOfficeAtHandActiveCalls.partyId, input.partyId)))
+    .limit(1);
+  if (existing[0] && existing[0].sequence > input.sequence) return false;
+  if (existing[0]) {
+    await db.update(relayOfficeAtHandActiveCalls).set({
+      sequence: input.sequence,
+      status: input.status,
+      callerPhoneCiphertext: input.callerPhoneCiphertext,
+      dialedPhoneCiphertext: input.dialedPhoneCiphertext,
+      receivedAt: new Date(),
+      expiresAt: input.expiresAt,
+    }).where(eq(relayOfficeAtHandActiveCalls.id, existing[0].id));
+    return true;
+  }
+  await db.insert(relayOfficeAtHandActiveCalls).values(input);
+  return true;
+}
+
+export async function listCurrentOfficeAtHandActiveCalls() {
+  const db = await getDb();
+  if (!db) return [];
+  const now = new Date();
+  await db.delete(relayOfficeAtHandActiveCalls).where(lt(relayOfficeAtHandActiveCalls.expiresAt, now));
+  return db.select().from(relayOfficeAtHandActiveCalls).where(gte(relayOfficeAtHandActiveCalls.expiresAt, now));
+}
+
+export async function removeOfficeAtHandActiveCall(sessionId: string, partyId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  await db.delete(relayOfficeAtHandActiveCalls).where(
+    and(eq(relayOfficeAtHandActiveCalls.sessionId, sessionId), eq(relayOfficeAtHandActiveCalls.partyId, partyId))
+  );
+}
+
+/** Stores the provider identifier and selected Dealership record for the one time-limited test feed. */
+export async function saveOfficeAtHandTestSubscription(input: { providerSubscriptionId: string; dealershipRecordId: string; status: string; expiresAt: Date }) {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  await db.insert(relayOfficeAtHandTestSubscriptions).values(input).onDuplicateKeyUpdate({
+    set: { dealershipRecordId: input.dealershipRecordId, status: input.status, expiresAt: input.expiresAt },
+  });
+}
+
+/** Returns the current short-lived test subscription without exposing any call data. */
+export async function getCurrentOfficeAtHandTestSubscription() {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  const rows = await db
+    .select({ dealerRecordId: relayOfficeAtHandTestSubscriptions.dealershipRecordId, expiresAt: relayOfficeAtHandTestSubscriptions.expiresAt })
+    .from(relayOfficeAtHandTestSubscriptions)
+    .where(gte(relayOfficeAtHandTestSubscriptions.expiresAt, new Date()))
+    .orderBy(desc(relayOfficeAtHandTestSubscriptions.expiresAt))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** Confirms an inbound event belongs to the currently approved, non-expired test feed. */
+export async function hasCurrentOfficeAtHandTestSubscription(subscriptionId: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db || !subscriptionId) return false;
+  const rows = await db
+    .select({ id: relayOfficeAtHandTestSubscriptions.id })
+    .from(relayOfficeAtHandTestSubscriptions)
+    .where(and(
+      eq(relayOfficeAtHandTestSubscriptions.providerSubscriptionId, subscriptionId),
+      gte(relayOfficeAtHandTestSubscriptions.expiresAt, new Date())
+    ))
+    .limit(1);
+  return Boolean(rows[0]);
+}
 
 export async function getCampaignByChannelName(channelName: string) {
   const db = await getDb();
@@ -86,6 +220,103 @@ export async function updateCampaignArchive(
   const db = await getDb();
   if (!db) throw new Error("Relay database is unavailable");
   await db.update(relayCampaigns).set(patch).where(eq(relayCampaigns.id, campaignId));
+}
+
+/** Returns the one active private Super Admin channel, if setup has completed. */
+export async function getActiveSuperAdminChannel() {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .select()
+    .from(relaySuperAdminChannels)
+    .where(and(eq(relaySuperAdminChannels.controlKey, SUPER_ADMIN_CONTROL_KEY), eq(relaySuperAdminChannels.isActive, true)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** Saves the user-created private #super-admin channel without storing membership or credentials. */
+export async function saveSuperAdminChannel(input: { channelId: string; channelName: string; canvasId?: string | null }) {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  await db.insert(relaySuperAdminChannels).values({
+    controlKey: SUPER_ADMIN_CONTROL_KEY,
+    channelId: input.channelId,
+    channelName: input.channelName,
+    canvasId: input.canvasId ?? null,
+    isActive: true,
+  }).onDuplicateKeyUpdate({
+    set: { channelId: input.channelId, channelName: input.channelName, canvasId: input.canvasId ?? null, isActive: true },
+  });
+  return getActiveSuperAdminChannel();
+}
+
+export async function updateSuperAdminCanvasId(canvasId: string | null) {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  await db.update(relaySuperAdminChannels).set({ canvasId }).where(eq(relaySuperAdminChannels.controlKey, SUPER_ADMIN_CONTROL_KEY));
+}
+
+/** Lists only campaigns that still have an individual pending archive job. */
+export async function listPendingCampaignArchives() {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(relayCampaigns)
+    .where(and(
+      eq(relayCampaigns.archiveStatus, "scheduled"),
+      isNotNull(relayCampaigns.archiveTaskUid),
+      isNotNull(relayCampaigns.channelId)
+    ))
+    .orderBy(relayCampaigns.archiveAfter);
+}
+
+export async function getSuperAdminArchiveControl(campaignId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .select()
+    .from(relaySuperAdminArchiveControls)
+    .where(eq(relaySuperAdminArchiveControls.campaignId, campaignId))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** Upserts the one bot-authored Keep Open control tied to a campaign archive registration. */
+export async function saveSuperAdminArchiveControl(input: {
+  campaignId: number;
+  superAdminChannelId: string;
+  slackMessageTs: string;
+  status: "pending" | "processing" | "kept_open" | "archived" | "failed";
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  await db.insert(relaySuperAdminArchiveControls).values(input).onDuplicateKeyUpdate({
+    set: {
+      superAdminChannelId: input.superAdminChannelId,
+      slackMessageTs: input.slackMessageTs,
+      status: input.status,
+    },
+  });
+  return getSuperAdminArchiveControl(input.campaignId);
+}
+
+export async function updateSuperAdminArchiveControlStatus(campaignId: number, status: "pending" | "processing" | "kept_open" | "archived" | "failed") {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  await db.update(relaySuperAdminArchiveControls).set({ status }).where(eq(relaySuperAdminArchiveControls.campaignId, campaignId));
+}
+
+/** Claims one pending Keep Open control before cancelling its linked archive job. */
+export async function claimPendingSuperAdminArchiveControl(input: { campaignId: number; superAdminChannelId: string }): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  const result = await db.update(relaySuperAdminArchiveControls).set({ status: "processing" }).where(and(
+    eq(relaySuperAdminArchiveControls.campaignId, input.campaignId),
+    eq(relaySuperAdminArchiveControls.superAdminChannelId, input.superAdminChannelId),
+    eq(relaySuperAdminArchiveControls.status, "pending")
+  ));
+  return getDatabaseAffectedRows(result) === 1;
 }
 
 export async function createWebhookReceipt(input: {
