@@ -23,6 +23,7 @@ describe("Super Admin control content", () => {
     const canvas = buildSuperAdminCanvas();
     expect(canvas).toContain("# ADO Super Admin");
     expect(canvas).toContain("Keep Open");
+    expect(canvas).toContain("ABC Test only");
     expect(canvas).toContain("does not change GoHighLevel workflows");
     expect(canvas).not.toContain("API key");
   });

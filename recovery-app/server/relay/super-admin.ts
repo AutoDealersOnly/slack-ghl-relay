@@ -30,6 +30,7 @@ import { refreshProductionCanvas } from "./workflows";
 export const SUPER_ADMIN_CHANNEL_NAME = "super-admin";
 export const SUPER_ADMIN_KEEP_OPEN_ACTION = "super_admin_keep_open";
 export const SUPER_ADMIN_REPAIR_CANVAS_ACTION = "super_admin_repair_production_canvas";
+export const SUPER_ADMIN_CANVAS_REPAIR_ENABLED = false;
 
 type PendingArchive = Awaited<ReturnType<typeof listPendingCampaignArchives>>[number];
 
@@ -58,13 +59,13 @@ Campaign channels are normally scheduled to archive three calendar days after th
 
 ### Production Canvas repair
 
-Select **Repair Production Canvas** to choose one campaign channel. It first checks whether that channel’s saved Production Canvas is still visible in Slack. A healthy Canvas is left alone. A detached Canvas is refreshed only for the selected channel using the normal Slack command Canvas path. It does not change Proof Requested, a GoHighLevel workflow, channel membership, dates, or another campaign.
+Production Canvas repair is **not available from Super Admin**. Active staff campaign channels must not be used for Canvas repair or testing, because even a short-lived duplicate Canvas causes confusion. Any future repair design must use an explicitly approved test-only channel first.
 
 ## Automation guide
 
 | Automation | Normal purpose | Available here now |
 |---|---|---|
-| Production Canvas | Keeps the campaign’s Production Canvas current. | **Repair Production Canvas** for one selected channel. |
+| Production Canvas | Keeps the campaign’s Production Canvas current. | Instructions only. Repair is disabled for active campaign channels. |
 | Proof-stage messages | Posts proof-stage messages to the correct campaign channel. | Instructions only. |
 | BDC mailpiece images | Updates the linked dealership’s mailpiece images after Sent to Print. | Instructions only. |
 | Campaign channel archive | Warns before and archives after Event End. | **Keep Open** for one pending campaign. |
@@ -76,7 +77,7 @@ Select **Repair Production Canvas** to choose one campaign channel. It first che
 
 ## Important limits
 
-This channel does not change GoHighLevel workflows, protected settings, call-center routing, users, recordings, numbers, proof stages, or customer records. New controls are added one at a time only after they are tested and approved.`;
+This channel does not change GoHighLevel workflows, protected settings, call-center routing, users, recordings, numbers, proof stages, or customer records. **All automation testing happens in ABC Test only.** An active campaign channel is hands-off for testing unless David explicitly approves that exact exception. New controls are added one at a time only after they are tested and approved.`;
 }
 
 export function buildPendingArchiveControlMessage(campaign: PendingArchive): { text: string; blocks: SlackBlock[] } {
@@ -130,20 +131,12 @@ export function buildArchiveControlResultMessage(campaign: PendingArchive, statu
 
 export function buildCanvasRepairLauncherMessage(): { text: string; blocks: SlackBlock[] } {
   return {
-    text: "Repair one campaign’s Production Canvas after confirming it is detached.",
+    text: "Production Canvas repair is disabled for active campaign channels.",
     blocks: [
-      { type: "header", text: { type: "plain_text", text: "Production Canvas repair", emoji: false } },
+      { type: "header", text: { type: "plain_text", text: "Production Canvas repair unavailable", emoji: false } },
       {
         type: "section",
-        text: { type: "mrkdwn", text: "Use this only when a campaign channel is missing its Production Canvas or the Canvas is not showing the current campaign information. The repair checks the selected channel first and does nothing if its Canvas is already healthy." },
-      },
-      {
-        type: "actions",
-        elements: [{
-          type: "button",
-          text: { type: "plain_text", text: "Repair Production Canvas", emoji: false },
-          action_id: SUPER_ADMIN_REPAIR_CANVAS_ACTION,
-        }],
+        text: { type: "mrkdwn", text: "Repair is disabled for active staff campaign channels. Do not use a live channel for Canvas testing. **All automation testing must use ABC Test only** unless David explicitly approves a specific exception." },
       },
     ],
   };
@@ -188,6 +181,28 @@ export async function setUpNamedSuperAdminChannel(): Promise<{ pendingControls: 
   const channel = await findSlackChannelByName(SUPER_ADMIN_CHANNEL_NAME);
   if (!channel) throw new Error("The bot cannot see #super-admin. Create it as private and invite the existing relay bot first.");
   return setUpSuperAdminChannel(channel.id);
+}
+
+/**
+ * Uses only a channel reference explicitly supplied by the administrator when
+ * Slack does not grant this bot private-channel lookup visibility. It never
+ * searches for, creates, or changes a channel; successful Canvas creation is
+ * the membership proof before the Super Admin record is saved.
+ */
+export async function setUpConfirmedPrivateSuperAdminChannel(channelId: string): Promise<{ pendingControls: number }> {
+  const existing = await getActiveSuperAdminChannel();
+  if (existing && existing.channelId !== channelId) {
+    throw new Error("A different Super Admin channel is already active. Contact admin before changing it.");
+  }
+  const canvasId = await createOrUpdateSuperAdminCanvas(channelId, buildSuperAdminCanvas(), existing?.canvasId);
+  const saved = await saveSuperAdminChannel({ channelId, channelName: SUPER_ADMIN_CHANNEL_NAME, canvasId });
+  if (!saved) throw new Error("Super Admin channel could not be saved.");
+  await updateSuperAdminCanvasId(canvasId);
+  await syncSuperAdminCanvasRepairLauncher();
+  const pending = await listPendingCampaignArchives();
+  for (const campaign of pending) await syncSuperAdminPendingArchive(campaign);
+  await logRelayAction({ action: "super_admin_setup", outcome: "success", detail: "Private Super Admin Canvas and pending archive controls were refreshed using the administrator-confirmed channel reference." });
+  return { pendingControls: pending.length };
 }
 
 /** Creates or refreshes the one Super Admin control message for one still-pending archive. */
@@ -249,6 +264,7 @@ export async function keepOneCampaignChannelOpen(input: { superAdminChannelId: s
 
 /** Opens the private one-campaign picker only after rechecking the signed button’s originating channel. */
 export async function openCanvasRepairPicker(input: { superAdminChannelId: string; triggerId: string }): Promise<"opened" | "not_allowed" | "no_campaigns"> {
+  if (!SUPER_ADMIN_CANVAS_REPAIR_ENABLED) return "not_allowed";
   const superAdmin = await getActiveSuperAdminChannel();
   if (!superAdmin || superAdmin.channelId !== input.superAdminChannelId) return "not_allowed";
   const candidates = await listSuperAdminCanvasRepairCandidates();
@@ -263,6 +279,7 @@ export async function openCanvasRepairPicker(input: { superAdminChannelId: strin
 
 /** Rechecks one selected campaign and refreshes only a detached or missing Production Canvas. */
 export async function repairOneProductionCanvas(input: { superAdminChannelId: string; campaignId: number }): Promise<"repaired" | "already_current" | "not_allowed" | "channel_link_needs_refresh" | "not_found"> {
+  if (!SUPER_ADMIN_CANVAS_REPAIR_ENABLED) return "not_allowed";
   const superAdmin = await getActiveSuperAdminChannel();
   if (!superAdmin || superAdmin.channelId !== input.superAdminChannelId) return "not_allowed";
   const campaign = await getCampaignById(input.campaignId);

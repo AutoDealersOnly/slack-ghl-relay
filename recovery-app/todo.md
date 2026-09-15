@@ -277,8 +277,8 @@
 - [x] Create and test the private #super-admin Canvas and its pending-archive messages, preserving all existing campaign Canvas, proof-stage, BDC, and archive behavior.
 - [ ] Test the Super Admin setup in the user-created private #super-admin channel after the existing bot is invited and Slack Interactivity is enabled; do not change any other Slack app setting or scope.
 
-- [ ] Create a private Super Admin Slack channel and its Canvas as the plain-language home for approved GHL–Slack and Slack-only automation instructions, without putting protected settings or credentials in Slack.
-- [ ] Publish a clear inventory in the Super Admin Canvas stating, for each restored automation, its purpose, normal trigger, what a trusted administrator can safely control, and what remains protected or requires a GHL change.
+- [x] Create a private Super Admin Slack channel and its Canvas as the plain-language home for approved GHL–Slack and Slack-only automation instructions, without putting protected settings or credentials in Slack.
+- [x] Publish a clear inventory in the Super Admin Canvas stating, for each restored automation, its purpose, normal trigger, what a trusted administrator can safely control, and what remains protected or requires a GHL change.
 - [x] Build only separately authorized, narrow controls for individual automations, beginning with a selected campaign-channel archive hold; do not create a general-purpose control that can change protected settings, workflows, or unrelated automations.
 
 - [x] Diagnose and minimally restore the missing Production Canvas for 2610 Kia Wesley Chapel without changing its working Proof Requested relay, GoHighLevel workflow, Slack channel, or any other campaign behavior.
@@ -288,3 +288,13 @@
 - [x] Confirm the corrected 2610 Kia Wesley Chapel channel-name history and its exact saved Slack link before repairing the missing visible Production Canvas.
 
 - [x] Add a guarded Super Admin Repair Production Canvas control that rechecks one selected channel’s saved Canvas attachment, does nothing if it is healthy, and recreates or relinks only that channel’s visible Production Canvas when detached.
+
+- [x] Confirm the private #super-admin channel is visible to the existing relay bot, then create and verify the prepared Super Admin Canvas and its control messages without executing a control.
+
+- [x] Diagnose and correct the Super Admin setup lookup after the user confirmed the existing relay bot was already invited to private #super-admin; do not create a duplicate channel or modify the bot, channel, or other Slack automation during read-only investigation.
+
+- [x] Verify why the first Super Admin Repair Production Canvas test refreshed 2610 Kia Wesley Chapel rather than reporting its Canvas healthy, and confirm whether the Super Admin repair picker and pending-archive messages update automatically as campaigns are added or archived.
+
+- [x] Disable the live Super Admin Repair Production Canvas launcher and block repair actions for active campaign channels; future repair testing must use only an explicitly approved test-only channel.
+
+- [x] Enforce ABC Test as the exclusive test environment for all Slack–GHL automation experiments; do not use an active campaign channel unless the user explicitly approves that exact exception.

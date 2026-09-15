@@ -4,13 +4,15 @@
 
 The private **Super Admin** Slack channel will be the plain-language reference point for the automations between GoHighLevel and Slack. It will explain what each automation does and, only where it is safe, provide a simple control for one narrowly defined action. It will never show API keys, passwords, private links, location IDs, or other protected settings.
 
-> **First-version rule:** The action buttons are **Keep Open** for one selected pending archive and **Repair Production Canvas** for one selected campaign channel. Every other item is instructions and read-only status until its own safe control is separately designed, tested, and approved.
+> **Testing rule:** All Slack–GHL automation tests use **ABC Test only**. Every active campaign channel is hands-off for testing unless David explicitly approves that exact exception.
+
+> **First-version rule:** The only active action button is **Keep Open** for one selected pending archive. Every other item is instructions and read-only status until its own safe control is separately designed, tested, and approved.
 
 ## What the Canvas will explain
 
 | Automation | What it normally does | What Super Admin can safely do at first | What stays outside Slack controls |
 |---|---|---|---|
-| Production Canvas | Creates or refreshes the Production Canvas in the campaign channel when `/ghl` is used or the linked Production record changes. | Let an administrator select one campaign for **Repair Production Canvas** after the relay checks whether its Canvas is actually detached. | No editing of Production data, Canvas data, or workflow destinations. A healthy Canvas is left unchanged. |
+| Production Canvas | Creates or refreshes the Production Canvas in the campaign channel when `/ghl` is used or the linked Production record changes. | Explain the normal trigger and the safe escalation path. | **No Super Admin repair control.** Active staff campaign channels must never be used for Canvas repair or testing. |
 | Proof-stage messages | Posts the correct channel message when a Production record enters a proof stage. | Show the stage-to-message purpose. | No changing recipients, mentions, wording, or proof stage from Slack. |
 | BDC mailpiece images | After Sent to Print, uses qualifying PDFs to update the linked dealership’s BDC mailpiece images and values. | Show the expected successful result and the Media-permission prerequisite. | No rerun, image replacement, or custom-value edit button. |
 | Campaign channel archive | Warns one day before archive and archives three calendar days after Event End. | List pending archives and let an authorized admin choose **Keep Open** for one channel. | No bulk archive, no change to Event End, and no effect on another campaign. |
@@ -22,11 +24,11 @@ The private **Super Admin** Slack channel will be the plain-language reference p
 
 ## How the first control works
 
-The scheduled warning still appears in the affected campaign channel. The Super Admin channel will also receive a private message for each upcoming archive. An authorized administrator can select **Keep Open** on that specific message.
+The scheduled warning still appears in the affected campaign channel. The Super Admin channel also receives one private message for each upcoming archive. When a new campaign receives an archive schedule, its message is added. When its event date is rescheduled, the same message is refreshed. When it is kept open or archived normally, that message changes to show the final result. An authorized administrator can select **Keep Open** on that specific pending message.
 
 The relay will verify that the Slack request is authentic, verify that the button originated in the saved private Super Admin channel, and re-check that the exact campaign still has that pending archive job. Only then will it cancel that one scheduled archive and change the message to show the channel is being kept open. A repeat click, an expired job, a mismatched campaign, or an action from outside the private channel will make no change.
 
-The separate **Repair Production Canvas** launcher opens a picker for one channel-linked campaign. The relay verifies the signed request started in private `#super-admin`, confirms the selected campaign’s saved Slack channel still has the same name, and checks whether the saved Canvas is actually attached. If it is already attached, it does nothing. If it is detached, it runs only the proven refresh path for that selected campaign and posts a plain result in `#super-admin`. It does not change a proof-stage message, GoHighLevel workflow, dates, channel membership, or another campaign.
+Production Canvas repair is disabled in Super Admin. A live staff campaign channel cannot be used to diagnose, test, create, relink, or refresh a Canvas because a second or temporary Canvas would confuse staff. Any future repair design must first be developed and tested in an explicitly approved test-only channel, then separately approved before it is introduced to a live campaign.
 
 ## What still requires a person with the right access
 
