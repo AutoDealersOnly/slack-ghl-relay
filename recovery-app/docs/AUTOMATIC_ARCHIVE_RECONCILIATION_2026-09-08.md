@@ -18,6 +18,16 @@ In addition, a platform-managed daily reconciliation runs at **00:10 UTC**. It r
 
 The precise-match safeguard prevents a partial historical search result from becoming an archive decision. A potential ambiguous matching result is rejected rather than silently selecting a record.
 
+## Archive warning and keeping one channel open
+
+The scheduled warning sent in the campaign channel is exactly:
+
+> This channel is scheduled to archive tomorrow. Contact admin if the campaign needs to remain open.
+
+There is no "operations channel" reply path and no Slack reply command that cancels an archive. When a campaign must remain open, an ADO administrator must identify the campaign channel and cancel **only its matching pending archive job**. The administrator then clears that campaign’s saved archive and warning-job references and marks its archive status as cancelled. This does not change the Event End date or any other campaign’s schedule.
+
+On September 14, 2026, the pending ABC Test archive job was cancelled at the administrator’s request. Its saved archive and warning-job references were cleared, and no channel was archived or otherwise changed.
+
 ## Verification
 
 A short-lived live test ran successfully on September 8. It inspected 29 active campaign channels, restored four future schedules, flagged nine overdue records for approval, and archived no channel. The temporary test schedule was removed. The permanent daily schedule is active.

@@ -22,6 +22,7 @@ import { uploadCampaignMailpieceImages } from "./mailpiece-images";
 import { fetchProductionRecord } from "./ghl";
 
 const scheduledRelayRouter = Router();
+export const ARCHIVE_WARNING_MESSAGE = "This channel is scheduled to archive tomorrow. Contact admin if the campaign needs to remain open.";
 
 export function isAuthenticatedCronTask(user: { isCron?: boolean; taskUid?: string | null }): user is { isCron: true; taskUid: string } {
   return user.isCron === true && typeof user.taskUid === "string" && user.taskUid.length > 0;
@@ -73,7 +74,7 @@ scheduledRelayRouter.post("/archive-warning", async (req: Request, res: Response
       return;
     }
     campaignId = campaign.id;
-    await postSlackMessage(campaign.channelId, "This channel is scheduled to archive tomorrow. Reply in the operations channel if the campaign needs to remain open.");
+    await postSlackMessage(campaign.channelId, ARCHIVE_WARNING_MESSAGE);
     await logRelayAction({ campaignId: campaign.id, action: "campaign_archive_warning", outcome: "success", detail: "Archive warning posted to campaign channel." });
     await updateCampaignArchive(campaign.id, { warningTaskUid: null });
     if (campaign.warningTaskUid) await deleteHeartbeatJob(campaign.warningTaskUid, "").catch(() => undefined);

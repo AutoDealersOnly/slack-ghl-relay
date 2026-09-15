@@ -253,8 +253,17 @@
 - [x] Verify the 2609 Miracle Toyota P retry updates the appropriate BDC image value or values and posts the final BDC confirmation only after the image step succeeds.
 - [x] After the one-page rule passes regression tests, run the separately user-approved 2609 Miracle Toyota P image-only retry once more before reporting completion.
 - [x] Add and regression-test the one-page mailpiece rule: upload its first-page front image, explicitly clear the back BDC value, and preserve the existing two-page and two-mailpiece requirements.
-- [ ] Build a read-only active-call list that identifies the dealership from the dialed tracking number and lets an operator choose the call they are answering.
-- [ ] Reuse the existing duplicate-safe PIN/customer lookup and phone-update flow only after an operator selects a call; defer appointment and opportunity writes until their GHL permissions and behavior are separately approved.
+- [x] Build a read-only active-call list that identifies the dealership from the dialed tracking number and lets an operator choose the call they are answering.
+- [x] Reuse the existing duplicate-safe PIN/customer lookup and phone-update flow only after an operator selects a call; defer appointment and opportunity writes until their GHL permissions and behavior are separately approved.
 - [ ] Test the separate active-call version in ABC Dealer without changing any live OfficeAtHand call-center configuration, then document and back up the approved test version before any GHL menu-link replacement.
 
 - [x] Document, privately record, and back up the verified one-page BDC mailpiece repair: front image retained or uploaded, back Campaign Details value intentionally cleared, no duplicate Sent-to-Print notice or Proof Stage change, and the approved image-only retry completed.
+
+- [x] Verify and resolve the reported separate OfficeAtHand test-board startup import/export error before any further active-call testing; do not contact the provider or alter the current PIN Lookup or live call-center configuration.
+
+- [x] Enforce the existing ABC Dealer-only boundary in both the separate test selector and its server-side subscription guard before completing the selected-call lookup and phone-update path.
+
+- [x] Replace the invented archive-warning reference to an operations channel with the approved instruction to contact admin; preserve all archive timing and behavior.
+
+- [x] Locate and cancel only the pending ABC Test campaign-channel archive job; do not archive the channel or change any other campaign schedule.
+- [x] Document a real, safe admin procedure for keeping a specific campaign channel open rather than directing staff to a nonexistent operations channel.
