@@ -133,6 +133,7 @@ export const relaySuperAdminChannels = mysqlTable(
     channelId: varchar("channelId", { length: 32 }).notNull(),
     channelName: varchar("channelName", { length: 128 }).notNull(),
     canvasId: varchar("canvasId", { length: 32 }),
+    canvasRepairMessageTs: varchar("canvasRepairMessageTs", { length: 32 }),
     isActive: boolean("isActive").default(true).notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

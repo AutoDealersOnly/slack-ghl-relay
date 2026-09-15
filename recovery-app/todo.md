@@ -287,4 +287,4 @@
 
 - [x] Confirm the corrected 2610 Kia Wesley Chapel channel-name history and its exact saved Slack link before repairing the missing visible Production Canvas.
 
-- [ ] Add a guarded Super Admin Repair Production Canvas control that rechecks one selected channel’s saved Canvas attachment, does nothing if it is healthy, and recreates or relinks only that channel’s visible Production Canvas when detached.
+- [x] Add a guarded Super Admin Repair Production Canvas control that rechecks one selected channel’s saved Canvas attachment, does nothing if it is healthy, and recreates or relinks only that channel’s visible Production Canvas when detached.

@@ -18,6 +18,7 @@ export type SlackChannelFile = {
 
 export type SlackBlock = Record<string, unknown>;
 export type SlackPostedMessage = { channel: string; ts: string };
+export type SlackCanvasRepairCandidate = { id: number; productionName: string; channelName: string };
 
 const SLACK_API_URL = "https://slack.com/api";
 
@@ -231,6 +232,49 @@ export async function postSlackBlocks(channelId: string, text: string, blocks: S
 /** Updates only a message previously posted by this bot, retaining the private channel context. */
 export async function updateSlackMessage(channelId: string, messageTs: string, text: string, blocks: SlackBlock[]): Promise<void> {
   await slackApi("chat.update", { channel: channelId, ts: messageTs, text, blocks, as_user: true });
+}
+
+/** Opens the private Super Admin one-campaign Canvas repair picker from a signed button click. */
+export async function openProductionCanvasRepairModal(input: {
+  triggerId: string;
+  superAdminChannelId: string;
+  candidates: SlackCanvasRepairCandidate[];
+}): Promise<void> {
+  const options = input.candidates.slice(0, 100).map(candidate => ({
+    text: { type: "plain_text", text: `${candidate.channelName} — ${candidate.productionName}`.slice(0, 75), emoji: false },
+    value: String(candidate.id),
+  }));
+  await slackApi("views.open", {
+    trigger_id: input.triggerId,
+    view: {
+      type: "modal",
+      callback_id: "super_admin_repair_production_canvas_submit",
+      private_metadata: JSON.stringify({ superAdminChannelId: input.superAdminChannelId }),
+      title: { type: "plain_text", text: "Repair Production Canvas", emoji: false },
+      submit: { type: "plain_text", text: "Repair Canvas", emoji: false },
+      close: { type: "plain_text", text: "Cancel", emoji: false },
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: "This checks whether the selected channel’s saved Production Canvas is still attached. If it is already healthy, nothing changes. If it is detached, only that channel’s visible Production Canvas is refreshed.",
+          },
+        },
+        {
+          type: "input",
+          block_id: "super_admin_canvas_repair_campaign",
+          label: { type: "plain_text", text: "Campaign channel", emoji: false },
+          element: {
+            type: "static_select",
+            action_id: "super_admin_canvas_repair_campaign_select",
+            placeholder: { type: "plain_text", text: "Select one campaign", emoji: false },
+            options,
+          },
+        },
+      ],
+    },
+  });
 }
 
 export async function archiveSlackChannel(channelId: string): Promise<void> {

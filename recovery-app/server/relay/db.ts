@@ -256,6 +256,13 @@ export async function updateSuperAdminCanvasId(canvasId: string | null) {
   await db.update(relaySuperAdminChannels).set({ canvasId }).where(eq(relaySuperAdminChannels.controlKey, SUPER_ADMIN_CONTROL_KEY));
 }
 
+/** Saves the one bot-authored Canvas repair launcher timestamp for the active private Super Admin channel. */
+export async function updateSuperAdminCanvasRepairMessageTs(canvasRepairMessageTs: string | null) {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  await db.update(relaySuperAdminChannels).set({ canvasRepairMessageTs }).where(eq(relaySuperAdminChannels.controlKey, SUPER_ADMIN_CONTROL_KEY));
+}
+
 /** Lists only campaigns that still have an individual pending archive job. */
 export async function listPendingCampaignArchives() {
   const db = await getDb();
@@ -269,6 +276,24 @@ export async function listPendingCampaignArchives() {
       isNotNull(relayCampaigns.channelId)
     ))
     .orderBy(relayCampaigns.archiveAfter);
+}
+
+/** Lists the current channel-linked campaigns for the private Super Admin Canvas repair picker. */
+export async function listSuperAdminCanvasRepairCandidates() {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({
+      id: relayCampaigns.id,
+      productionName: relayCampaigns.productionName,
+      channelName: relayCampaigns.channelName,
+      channelId: relayCampaigns.channelId,
+      canvasId: relayCampaigns.canvasId,
+    })
+    .from(relayCampaigns)
+    .where(isNotNull(relayCampaigns.channelId))
+    .orderBy(desc(relayCampaigns.updatedAt))
+    .limit(100);
 }
 
 export async function getSuperAdminArchiveControl(campaignId: number) {

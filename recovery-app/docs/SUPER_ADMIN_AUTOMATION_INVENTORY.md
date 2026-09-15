@@ -4,13 +4,13 @@
 
 The private **Super Admin** Slack channel will be the plain-language reference point for the automations between GoHighLevel and Slack. It will explain what each automation does and, only where it is safe, provide a simple control for one narrowly defined action. It will never show API keys, passwords, private links, location IDs, or other protected settings.
 
-> **First-version rule:** The only action button will be **Keep Open** for one selected campaign channel that has a pending archive. Every other item is instructions and read-only status until its own safe control is separately designed, tested, and approved.
+> **First-version rule:** The action buttons are **Keep Open** for one selected pending archive and **Repair Production Canvas** for one selected campaign channel. Every other item is instructions and read-only status until its own safe control is separately designed, tested, and approved.
 
 ## What the Canvas will explain
 
 | Automation | What it normally does | What Super Admin can safely do at first | What stays outside Slack controls |
 |---|---|---|---|
-| Production Canvas | Creates or refreshes the Production Canvas in the campaign channel when `/ghl` is used or the linked Production record changes. | Show the normal trigger and recovery direction. | No editing of Production data, Canvas data, or workflow destinations. |
+| Production Canvas | Creates or refreshes the Production Canvas in the campaign channel when `/ghl` is used or the linked Production record changes. | Let an administrator select one campaign for **Repair Production Canvas** after the relay checks whether its Canvas is actually detached. | No editing of Production data, Canvas data, or workflow destinations. A healthy Canvas is left unchanged. |
 | Proof-stage messages | Posts the correct channel message when a Production record enters a proof stage. | Show the stage-to-message purpose. | No changing recipients, mentions, wording, or proof stage from Slack. |
 | BDC mailpiece images | After Sent to Print, uses qualifying PDFs to update the linked dealership’s BDC mailpiece images and values. | Show the expected successful result and the Media-permission prerequisite. | No rerun, image replacement, or custom-value edit button. |
 | Campaign channel archive | Warns one day before archive and archives three calendar days after Event End. | List pending archives and let an authorized admin choose **Keep Open** for one channel. | No bulk archive, no change to Event End, and no effect on another campaign. |
@@ -24,11 +24,13 @@ The private **Super Admin** Slack channel will be the plain-language reference p
 
 The scheduled warning still appears in the affected campaign channel. The Super Admin channel will also receive a private message for each upcoming archive. An authorized administrator can select **Keep Open** on that specific message.
 
-The relay will verify that the Slack request is authentic, verify that the person who selected the button is on the protected Super Admin list, and re-check that the exact campaign still has that pending archive job. Only then will it cancel that one scheduled archive and change the message to show the channel is being kept open. A repeat click, an expired job, a mismatched campaign, or an unauthorized person will make no change.
+The relay will verify that the Slack request is authentic, verify that the button originated in the saved private Super Admin channel, and re-check that the exact campaign still has that pending archive job. Only then will it cancel that one scheduled archive and change the message to show the channel is being kept open. A repeat click, an expired job, a mismatched campaign, or an action from outside the private channel will make no change.
+
+The separate **Repair Production Canvas** launcher opens a picker for one channel-linked campaign. The relay verifies the signed request started in private `#super-admin`, confirms the selected campaign’s saved Slack channel still has the same name, and checks whether the saved Canvas is actually attached. If it is already attached, it does nothing. If it is detached, it runs only the proven refresh path for that selected campaign and posts a plain result in `#super-admin`. It does not change a proof-stage message, GoHighLevel workflow, dates, channel membership, or another campaign.
 
 ## What still requires a person with the right access
 
-The first live setup requires two deliberate Slack changes by an authorized Slack app administrator: create or identify the private Super Admin channel and turn on the existing Slack app’s **Interactivity** setting with the dedicated request address. Neither change replaces the bot token, changes current message behavior, or adds a new Slack scope. The administrator list must also be agreed before a control button is activated.
+The first live setup requires two deliberate Slack changes by an authorized Slack app administrator: create or identify the private Super Admin channel and turn on the existing Slack app’s **Interactivity** setting with the dedicated request address. Neither change replaces the bot token, changes current message behavior, or adds a new Slack scope. The private channel’s membership is the administrator gate, so no separate named-user list is stored or maintained.
 
 Once that is complete, the Super Admin Canvas can be kept as the shared instructions page. Future controls will be added one automation at a time, each with its own test and approval.
 
@@ -37,3 +39,5 @@ Once that is complete, the Super Admin Canvas can be kept as the shared instruct
 [1]: https://docs.slack.dev/interactivity/handling-user-interaction "Handling user interaction in Slack apps"
 [2]: https://docs.slack.dev/authentication/verifying-requests-from-slack "Verifying requests from Slack"
 [3]: https://docs.slack.dev/surfaces/app-home "Slack App Home"
+[4]: https://docs.slack.dev/surfaces/modals "Slack Modals"
+[5]: https://docs.slack.dev/reference/interaction-payloads/view-interactions-payload "Slack view-submission payloads"

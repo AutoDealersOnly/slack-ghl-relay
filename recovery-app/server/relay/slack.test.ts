@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createOrUpdateProductionCanvas, downloadSlackPdf } from "./slack";
+import { createOrUpdateProductionCanvas, downloadSlackPdf, openProductionCanvasRepairModal } from "./slack";
 
 const originalFetch = global.fetch;
 const originalEnv = { ...process.env };
@@ -64,6 +64,26 @@ describe("Production Canvas linking", () => {
     await expect(createOrUpdateProductionCanvas("C123", "# Production")).resolves.toBe("F456");
     expect(fetchMock.mock.calls[1]?.[0]).toContain("conversations.info");
     expect(fetchMock.mock.calls[2]?.[0]).toContain("canvases.edit");
+  });
+});
+
+describe("Super Admin Canvas repair picker", () => {
+  it("opens one private-channel modal with the currently selectable campaign list", async () => {
+    process.env.SLACK_BOT_TOKEN = "test-token";
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true, view: { id: "V1" } }), { status: 200 }));
+    global.fetch = fetchMock as typeof fetch;
+
+    await openProductionCanvasRepairModal({
+      triggerId: "trigger",
+      superAdminChannelId: "C-super-admin",
+      candidates: [{ id: 42, channelName: "2610-sample-dealer-ame", productionName: "2610 Sample Dealer AME" }],
+    });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("views.open");
+    const request = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    expect(request.trigger_id).toBe("trigger");
+    expect(JSON.parse(request.view.private_metadata)).toEqual({ superAdminChannelId: "C-super-admin" });
+    expect(request.view.blocks[1].element.options[0].value).toBe("42");
   });
 });
 
