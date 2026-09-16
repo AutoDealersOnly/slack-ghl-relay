@@ -14,9 +14,16 @@ Use one private channel named **Super Admin** rather than a Canvas as the first 
 
 The existing Slack app must have **Interactivity** enabled and its single **Request URL** set to the published relay’s dedicated interaction endpoint. This must be done only with explicit administrator approval. It is an app setting, not a token replacement or a Slack scope change. The endpoint will use the existing protected signing secret; no secret belongs in source control, messages, or documentation. [1] [2]
 
+## Canvas repair safety finding — 2026-09-15
+
+Slack documents that `canvases.edit` updates an existing Canvas when given its saved Canvas ID, while `canvases.create` with a `channel_id` creates a new Canvas tab in that channel. The earlier generic repair relied on the channel-default Canvas field as an identity check; that is not reliable for a named Production tab and can lead to another tab being created. The rebuilt test path must therefore edit the saved ABC Test Canvas directly and refuse to create or relink a Canvas. It must stay ABC Test-only until separately approved. [5] [6] [7]
+
 ## References
 
 [1]: https://docs.slack.dev/interactivity/handling-user-interaction "Handling user interaction in Slack apps"
 [2]: https://docs.slack.dev/authentication/verifying-requests-from-slack "Verifying requests from Slack"
 [3]: https://docs.slack.dev/reference/methods/chat.update "Slack chat.update method"
 [4]: https://docs.slack.dev/surfaces/app-home "Slack App Home"
+[5]: https://docs.slack.dev/reference/methods/canvases.edit "Slack canvases.edit method"
+[6]: https://docs.slack.dev/reference/methods/canvases.create "Slack canvases.create method"
+[7]: https://docs.slack.dev/reference/methods/canvases.access.set "Slack canvases.access.set method"

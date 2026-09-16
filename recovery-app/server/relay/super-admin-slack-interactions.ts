@@ -2,10 +2,14 @@ import type { Request, Response } from "express";
 import { Router } from "express";
 import { getRelayConfig } from "./config";
 import {
+  postAbcTestCanvasRefreshResult,
   keepOneCampaignChannelOpen,
   openCanvasRepairPicker,
   postCanvasRepairResult,
+  refreshAbcTestProductionCanvas,
   repairOneProductionCanvas,
+  SUPER_ADMIN_CANVAS_REPAIR_ENABLED,
+  SUPER_ADMIN_REFRESH_ABC_TEST_CANVAS_ACTION,
   SUPER_ADMIN_KEEP_OPEN_ACTION,
   SUPER_ADMIN_REPAIR_CANVAS_ACTION,
 } from "./super-admin";
@@ -29,6 +33,7 @@ type SlackInteractionPayload = {
 export type KeepOpenInteraction = { superAdminChannelId: string; campaignId: number; messageTs: string };
 export type CanvasRepairLauncherInteraction = { superAdminChannelId: string; triggerId: string };
 export type CanvasRepairSubmission = { superAdminChannelId: string; campaignId: number };
+export type AbcTestCanvasRefreshInteraction = { superAdminChannelId: string };
 
 const CANVAS_REPAIR_CALLBACK_ID = "super_admin_repair_production_canvas_submit";
 
@@ -72,6 +77,21 @@ export function parseCanvasRepairLauncherInteraction(payloadText: unknown): Canv
   return { superAdminChannelId, triggerId };
 }
 
+/** Parses only the signed ABC Test-only Canvas refresh button. */
+export function parseAbcTestCanvasRefreshInteraction(payloadText: unknown): AbcTestCanvasRefreshInteraction | null {
+  if (typeof payloadText !== "string" || payloadText.length > 25_000) return null;
+  let payload: SlackInteractionPayload;
+  try {
+    payload = JSON.parse(payloadText) as SlackInteractionPayload;
+  } catch {
+    return null;
+  }
+  const action = payload.actions?.[0];
+  const superAdminChannelId = payload.channel?.id?.trim() ?? "";
+  if (payload.type !== "block_actions" || action?.action_id !== SUPER_ADMIN_REFRESH_ABC_TEST_CANVAS_ACTION || !superAdminChannelId) return null;
+  return { superAdminChannelId };
+}
+
 /** Parses only a submitted repair modal carrying the private Super Admin channel context. */
 export function parseCanvasRepairSubmission(payloadText: unknown): CanvasRepairSubmission | null {
   if (typeof payloadText !== "string" || payloadText.length > 25_000) return null;
@@ -111,8 +131,26 @@ superAdminSlackInteractionRouter.post("/", async (req: SlackInteractionRequest, 
   }
 
   const payloadText = (req.body as { payload?: unknown }).payload;
+  const abcTestRefresh = parseAbcTestCanvasRefreshInteraction(payloadText);
+  if (abcTestRefresh) {
+    res.status(200).json({ response_type: "ephemeral", text: "Refreshing the existing ABC Test Production Canvas only. No Canvas will be created." });
+    void (async () => {
+      try {
+        const result = await refreshAbcTestProductionCanvas(abcTestRefresh);
+        await postAbcTestCanvasRefreshResult({ ...abcTestRefresh, result });
+      } catch {
+        await postAbcTestCanvasRefreshResult({ ...abcTestRefresh, result: "not_allowed" }).catch(() => undefined);
+      }
+    })();
+    return;
+  }
+
   const launcher = parseCanvasRepairLauncherInteraction(payloadText);
   if (launcher) {
+    if (!SUPER_ADMIN_CANVAS_REPAIR_ENABLED) {
+      res.status(200).json({ response_type: "ephemeral", text: "Production Canvas repair is disabled for active campaign channels." });
+      return;
+    }
     try {
       const result = await openCanvasRepairPicker(launcher);
       if (result === "opened") {
@@ -128,6 +166,10 @@ superAdminSlackInteractionRouter.post("/", async (req: SlackInteractionRequest, 
 
   const submission = parseCanvasRepairSubmission(payloadText);
   if (submission) {
+    if (!SUPER_ADMIN_CANVAS_REPAIR_ENABLED) {
+      res.status(200).json({ response_action: "clear" });
+      return;
+    }
     res.status(200).json({ response_action: "clear" });
     void (async () => {
       try {

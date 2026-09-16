@@ -27,6 +27,7 @@ import {
   getCurrentChannelPdfs,
   joinAndInviteCampaignChannel,
   postSlackMessage,
+  refreshKnownProductionCanvas,
 } from "./slack";
 import type {
   DealershipProperties,
@@ -112,6 +113,22 @@ export async function refreshProductionCanvas(payload: ProductionWebhookPayload)
   }
   await logRelayAction({ campaignId: updated.id, action: "production_canvas_refresh", outcome: "success", detail: "Production Canvas updated in place." });
   return updated;
+}
+
+/**
+ * Updates only the saved Canvas for a known campaign. Unlike the normal
+ * `/ghl` path, this intentionally never creates or relinks a Canvas.
+ */
+export async function refreshKnownProductionCanvasOnly(payload: ProductionWebhookPayload): Promise<"refreshed" | "canvas_link_missing" | "campaign_not_found"> {
+  const context = await loadProductionContext(payload);
+  const campaign = await getCampaignByChannelName(context.channelName);
+  if (!campaign?.channelId) return "campaign_not_found";
+  if (!campaign.canvasId) return "canvas_link_missing";
+  const markdown = buildProductionCanvas(context.production.properties, context.dealership?.properties ?? {});
+  const refreshed = await refreshKnownProductionCanvas(campaign.canvasId, markdown);
+  if (!refreshed) return "canvas_link_missing";
+  await logRelayAction({ campaignId: campaign.id, action: "production_canvas_refresh", outcome: "success", detail: "Known Production Canvas updated in place without creating a Canvas." });
+  return "refreshed";
 }
 
 const formatProofDate = (value?: string): string => {

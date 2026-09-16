@@ -156,13 +156,14 @@ export async function createOrUpdateProductionCanvas(
   existingCanvasId?: string | null
 ): Promise<string> {
   if (existingCanvasId) {
-    const attachedCanvasId = await getAttachedChannelCanvasId(channelId);
-    if (attachedCanvasId === existingCanvasId) {
+    try {
       await slackApi("canvases.edit", {
         canvas_id: existingCanvasId,
         changes: [{ operation: "replace", document_content: { type: "markdown", markdown } }],
       });
       return existingCanvasId;
+    } catch (error) {
+      if (!String(error).includes("canvas_not_found")) throw error;
     }
   }
   try {
@@ -181,6 +182,23 @@ export async function createOrUpdateProductionCanvas(
       changes: [{ operation: "replace", document_content: { type: "markdown", markdown } }],
     });
     return canvasId;
+  }
+}
+
+/**
+ * Replaces only a known saved Production Canvas. It never creates or relinks a
+ * Canvas, which makes it safe for the ABC Test-only Super Admin refresh.
+ */
+export async function refreshKnownProductionCanvas(canvasId: string, markdown: string): Promise<boolean> {
+  try {
+    await slackApi("canvases.edit", {
+      canvas_id: canvasId,
+      changes: [{ operation: "replace", document_content: { type: "markdown", markdown } }],
+    });
+    return true;
+  } catch (error) {
+    if (String(error).includes("canvas_not_found")) return false;
+    throw error;
   }
 }
 

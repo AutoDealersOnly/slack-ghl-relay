@@ -12,14 +12,14 @@ This index connects each operational function to its company GitHub backup and t
 | Recovery branch | `secure-recovery-relay-20260826` |
 | Restored application folder | `recovery-app` |
 | Current published relay | `https://ghl-slackrel-knvzqxuh.manus.space` |
-| Credentials | Private recovery-vault Google document only; never GitHub or this index. |
+| Credentials | **Manus Keys and Codes** Google document only; never GitHub or this index. |
 
 ## Restored functions
 
 | Function | Existing connection that remains in GHL or Slack | Replacement destination or command address | Result to verify after recovery |
 |---|---|---|---|
 | Manual Production Canvas | Slack `/ghl` command | `/api/slack/commands/ghl` | Creates or updates one populated Production Canvas tab in the current campaign channel. Before editing a saved Canvas, the relay verifies that Slack still shows that Canvas in the same channel; a detached link is safely relinked or replaced only for that channel. |
-| Super Admin controls | User-created private `#super-admin` channel plus the existing Slack app’s Interactivity Request URL | `/api/slack/interactions` | Shows the plain-language automation Canvas and one active **Keep Open** control for a matching pending archive. Verified in ABC Test: Keep Open cancelled one temporary far-future ABC Test schedule and changed its message to kept open, without changing the event date or any live campaign. Archive messages are added at schedule time, refreshed on reschedule, and changed to final status when kept open or archived. Production Canvas repair is disabled for active staff channels and must not be tested there. The private channel’s membership is the control gate. |
+| Super Admin controls | User-created private `#super-admin` channel plus the existing Slack app’s Interactivity Request URL | `/api/slack/interactions` | Shows the plain-language automation Canvas and a **Keep Open** control for a matching pending archive. Verified in ABC Test: Keep Open cancelled one temporary far-future ABC Test schedule and changed its message to kept open, without changing the event date or any live campaign. Archive messages are added at schedule time, refreshed on reschedule, and changed to final status when kept open or archived. **Refresh ABC Test Production Canvas** is separately verified: it updates ABC Test’s existing saved Canvas directly and cannot create or relink a Canvas. The generic repair control remains blocked for active staff channels. The private channel’s membership is the control gate. |
 | Automation testing rule | ABC Test only | N/A | Test every Slack–GHL automation change in ABC Test. Active campaign channels are hands-off for testing unless David explicitly approves that exact exception. |
 | Automatic Production Canvas refresh | **Production Update GHL to Slack** Custom Webhook | `/api/relay/ghl/production_update` | Updates the existing Production Canvas; does not create a duplicate tab. The current workflow triggers for its configured field changes. |
 | Proof-stage messages | **GHL Production Message to Slack** Custom Webhook | `/api/relay/ghl/proof_status` | Sends the approved Proof Request, Proofing Needed, Approved to Upload, and Sent to Print messages in the campaign channel. |
@@ -34,11 +34,11 @@ Each destination above is appended to the published relay URL. The Custom Webhoo
 
 ## Simple rebuild procedure
 
-First, open the private recovery-vault Google document and this Recovery Index. Then connect the company GitHub account, clone the company repository, and check out the recovery branch shown above. The `recovery-app` folder contains the secret-free source, tests, database schema, workflow maps, and recovery instructions.
+First, open **Manus Keys and Codes** and this Recovery Index. Then connect the company GitHub account, clone the company repository, and check out the recovery branch shown above. The `recovery-app` folder contains the secret-free source, tests, database schema, workflow maps, and recovery instructions.
 
-Next, create a replacement relay deployment from that folder. Enter the current protected settings from the private vault; do not copy credentials into source files, GitHub, chat, or the status page. Once the replacement has passed its tests, update the one existing Slack command or GoHighLevel Custom Webhook address listed in the table. Test in ABC Dealer before approving broader use.
+Next, create a replacement relay deployment from that folder. Enter the current protected settings from **Manus Keys and Codes**; do not copy credentials into source files, GitHub, chat, or the status page. Once the replacement has passed its tests, update the one existing Slack command or GoHighLevel Custom Webhook address listed in the table. Test in ABC Dealer before approving broader use.
 
-Finally, document the new published relay URL and the test result in the private recovery-vault Google document. Commit and push the secret-free updated source and recovery instructions to the same GitHub branch before moving to the next automation.
+Finally, document the new published relay URL and the test result in **Manus Keys and Codes**. Commit and push the secret-free updated source and recovery instructions to the same GitHub branch before moving to the next automation.
 
 ## Future adjustments
 

@@ -298,3 +298,9 @@
 - [x] Disable the live Super Admin Repair Production Canvas launcher and block repair actions for active campaign channels; future repair testing must use only an explicitly approved test-only channel.
 
 - [x] Enforce ABC Test as the exclusive test environment for all Slack–GHL automation experiments; do not use an active campaign channel unless the user explicitly approves that exact exception.
+
+- [x] Rebuild Production Canvas repair as an ABC Test-only control and verify it updates ABC Test’s existing visible Canvas without creating a duplicate.
+- [x] Record the successful ABC Test-only Canvas refresh and the direct-edit/no-create design in the recovery instructions and Manus Keys and Codes.
+- [ ] Keep the Production Canvas repair control limited to ABC Test until David explicitly approves a wider release after reviewing this successful test.
+
+- [x] Replace the stale disabled Production Canvas repair launcher in private #super-admin with the published ABC Test-only direct-refresh control; do not create, refresh, or relink any campaign Canvas during this message-only update.

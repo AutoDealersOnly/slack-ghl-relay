@@ -3,6 +3,7 @@ import {
   claimPendingSuperAdminArchiveControl,
   getActiveSuperAdminChannel,
   getCampaignById,
+  getCampaignByChannelName,
   getSuperAdminArchiveControl,
   listPendingCampaignArchives,
   listSuperAdminCanvasRepairCandidates,
@@ -25,12 +26,14 @@ import {
   updateSlackMessage,
 } from "./slack";
 import { redactErrorDetail } from "./security";
-import { refreshProductionCanvas } from "./workflows";
+import { refreshKnownProductionCanvasOnly, refreshProductionCanvas } from "./workflows";
 
 export const SUPER_ADMIN_CHANNEL_NAME = "super-admin";
 export const SUPER_ADMIN_KEEP_OPEN_ACTION = "super_admin_keep_open";
 export const SUPER_ADMIN_REPAIR_CANVAS_ACTION = "super_admin_repair_production_canvas";
+export const SUPER_ADMIN_REFRESH_ABC_TEST_CANVAS_ACTION = "super_admin_refresh_abc_test_canvas";
 export const SUPER_ADMIN_CANVAS_REPAIR_ENABLED = false;
+export const ABC_TEST_CHANNEL_NAME = "2609-abc-test-ame";
 
 type PendingArchive = Awaited<ReturnType<typeof listPendingCampaignArchives>>[number];
 
@@ -59,13 +62,13 @@ Campaign channels are normally scheduled to archive three calendar days after th
 
 ### Production Canvas repair
 
-Production Canvas repair is **not available from Super Admin**. Active staff campaign channels must not be used for Canvas repair or testing, because even a short-lived duplicate Canvas causes confusion. Any future repair design must use an explicitly approved test-only channel first.
+Only **ABC Test** can be refreshed from Super Admin while this repair is being rebuilt. The refresh edits the saved ABC Test Production Canvas directly and refuses to create or relink a Canvas. Active staff campaign channels must not be used for Canvas repair or testing.
 
 ## Automation guide
 
 | Automation | Normal purpose | Available here now |
 |---|---|---|
-| Production Canvas | Keeps the campaign’s Production Canvas current. | Instructions only. Repair is disabled for active campaign channels. |
+| Production Canvas | Keeps the campaign’s Production Canvas current. | **Refresh ABC Test Production Canvas** only. It edits the saved Canvas and cannot create one. |
 | Proof-stage messages | Posts proof-stage messages to the correct campaign channel. | Instructions only. |
 | BDC mailpiece images | Updates the linked dealership’s mailpiece images after Sent to Print. | Instructions only. |
 | Campaign channel archive | Warns before and archives after Event End. | **Keep Open** for one pending campaign. |
@@ -131,12 +134,20 @@ export function buildArchiveControlResultMessage(campaign: PendingArchive, statu
 
 export function buildCanvasRepairLauncherMessage(): { text: string; blocks: SlackBlock[] } {
   return {
-    text: "Production Canvas repair is disabled for active campaign channels.",
+    text: "Refresh the existing ABC Test Production Canvas without creating a new Canvas.",
     blocks: [
-      { type: "header", text: { type: "plain_text", text: "Production Canvas repair unavailable", emoji: false } },
+      { type: "header", text: { type: "plain_text", text: "ABC Test Production Canvas refresh", emoji: false } },
       {
         type: "section",
-        text: { type: "mrkdwn", text: "Repair is disabled for active staff campaign channels. Do not use a live channel for Canvas testing. **All automation testing must use ABC Test only** unless David explicitly approves a specific exception." },
+        text: { type: "mrkdwn", text: "This works for **ABC Test only**. It updates the saved ABC Test Production Canvas directly and cannot create or relink a Canvas. Active staff campaign channels remain unavailable." },
+      },
+      {
+        type: "actions",
+        elements: [{
+          type: "button",
+          text: { type: "plain_text", text: "Refresh ABC Test Production Canvas", emoji: false },
+          action_id: SUPER_ADMIN_REFRESH_ABC_TEST_CANVAS_ACTION,
+        }],
       },
     ],
   };
@@ -290,6 +301,42 @@ export async function repairOneProductionCanvas(input: { superAdminChannelId: st
   await refreshProductionCanvas({ production_name: campaign.productionName, channel_name: campaign.channelName });
   await logRelayAction({ campaignId: campaign.id, action: "super_admin_repair_production_canvas", outcome: "success", detail: "Super Admin refreshed one detached Production Canvas." });
   return "repaired";
+}
+
+/**
+ * Updates only ABC Test's saved Production Canvas. It intentionally has no
+ * create or relink branch, so it cannot add a second Canvas tab.
+ */
+export async function refreshAbcTestProductionCanvas(input: { superAdminChannelId: string }): Promise<"refreshed" | "canvas_link_missing" | "not_allowed" | "not_found"> {
+  const superAdmin = await getActiveSuperAdminChannel();
+  if (!superAdmin || superAdmin.channelId !== input.superAdminChannelId) return "not_allowed";
+  const campaign = await getCampaignByChannelName(ABC_TEST_CHANNEL_NAME);
+  if (!campaign || campaign.channelName !== ABC_TEST_CHANNEL_NAME) return "not_found";
+  const result = await refreshKnownProductionCanvasOnly({
+    production_name: campaign.productionName,
+    channel_name: ABC_TEST_CHANNEL_NAME,
+  });
+  if (result === "campaign_not_found") return "not_found";
+  if (result === "canvas_link_missing") return "canvas_link_missing";
+  await logRelayAction({
+    campaignId: campaign.id,
+    action: "super_admin_refresh_abc_test_canvas",
+    outcome: "success",
+    detail: "Super Admin refreshed only the saved ABC Test Production Canvas without creating or relinking a Canvas.",
+  });
+  return "refreshed";
+}
+
+export async function postAbcTestCanvasRefreshResult(input: {
+  superAdminChannelId: string;
+  result: Awaited<ReturnType<typeof refreshAbcTestProductionCanvas>>;
+}): Promise<void> {
+  const text = input.result === "refreshed"
+    ? "ABC Test Production Canvas was refreshed in place. No Canvas was created."
+    : input.result === "canvas_link_missing"
+      ? "ABC Test has no saved Production Canvas link. No Canvas was created. Contact admin before retrying."
+      : "ABC Test Production Canvas refresh was not available. No Canvas was changed.";
+  await postSlackMessage(input.superAdminChannelId, text);
 }
 
 /** Posts a plain, non-sensitive outcome in the private Super Admin channel after the modal closes. */

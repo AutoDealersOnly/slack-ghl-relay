@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { SUPER_ADMIN_KEEP_OPEN_ACTION, SUPER_ADMIN_REPAIR_CANVAS_ACTION } from "./super-admin";
-import { parseCanvasRepairLauncherInteraction, parseCanvasRepairSubmission, parseKeepOpenInteraction } from "./super-admin-slack-interactions";
+import { SUPER_ADMIN_KEEP_OPEN_ACTION, SUPER_ADMIN_REFRESH_ABC_TEST_CANVAS_ACTION, SUPER_ADMIN_REPAIR_CANVAS_ACTION } from "./super-admin";
+import { parseAbcTestCanvasRefreshInteraction, parseCanvasRepairLauncherInteraction, parseCanvasRepairSubmission, parseKeepOpenInteraction } from "./super-admin-slack-interactions";
 
 describe("Super Admin Slack interaction parser", () => {
   it("accepts only the exact Keep Open block action with one positive campaign ID", () => {
@@ -24,6 +24,15 @@ describe("Super Admin Slack interaction parser", () => {
 });
 
 describe("Super Admin Canvas repair interaction parser", () => {
+  it("accepts only the ABC Test-only direct-refresh action from a channel context", () => {
+    const result = parseAbcTestCanvasRefreshInteraction(JSON.stringify({
+      type: "block_actions",
+      channel: { id: "C-super-admin" },
+      actions: [{ action_id: SUPER_ADMIN_REFRESH_ABC_TEST_CANVAS_ACTION }],
+    }));
+    expect(result).toEqual({ superAdminChannelId: "C-super-admin" });
+  });
+
   it("accepts only the exact signed-channel repair launcher action with a trigger", () => {
     const result = parseCanvasRepairLauncherInteraction(JSON.stringify({
       type: "block_actions",
