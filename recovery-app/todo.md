@@ -313,4 +313,4 @@
 - [x] Include both workflow notices and current lower-case GoHighLevel tags in the ABC Test dashboard, so manual tag changes are collected on every refresh without exposing customer information in Slack.
 - [x] Add the QR activity, Phone, SMS, OneClick/Facebook, AI Booked Appointments, and QR Shows modules; treat `qr show` and `qr check in` as one show total, and remove `qr visit` when `qr appointment` is applied.
 - [x] Allow `/ghl` to refresh the separate Activity Dashboard only for ABC Test after the Production Canvas is updated; it must not create another Activity Dashboard Canvas after the first saved tab exists.
-- [ ] After the ABC Test dashboard proves automatic tag collection, document its operational workflow in Manus Keys and Codes and push the secret-free recovery backup before extending it beyond ABC Test.
+- [x] Document the verified ABC Test dashboard refresh and manual tag collection in Manus Keys and Codes, provide the ABC-only Phone and SMS setup guide, and push the secret-free recovery backup before extending it beyond ABC Test.
