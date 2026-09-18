@@ -71,4 +71,4 @@ This catalog is the working map for the relay rebuild. **Nothing in this documen
 
 ## Operating Rules
 
-The relay must not show credentials on the status page, in logs, in GitHub, or in this catalog. Protected settings and the private recovery vault hold the values; GitHub holds only the source code, templates, tests, and recovery instructions. Each automation remains disabled until its individual ABC Dealer test is approved.
+The relay must not show credentials on the status page, in logs, in GitHub, or in this catalog. Protected settings and the Manus Keys and Codes hold the values; GitHub holds only the source code, templates, tests, and recovery instructions. Each automation remains disabled until its individual ABC Dealer test is approved.

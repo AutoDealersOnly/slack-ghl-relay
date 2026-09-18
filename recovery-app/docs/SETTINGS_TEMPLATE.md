@@ -1,8 +1,8 @@
 # Relay Protected Settings Template
 
-Use this file as a **name-only checklist** when preparing protected project settings. Add real values only in protected settings and the private recovery vault, never in this repository.
+Use this file as a **name-only checklist** when preparing protected project settings. Add real values only in protected settings and the Manus Keys and Codes, never in this repository.
 
-| Setting name | Added | Rotated on | Private vault entry verified |
+| Setting name | Added | Rotated on | Manus Keys and Codes entry verified |
 |---|---|---|---|
 | `GHL_API_KEY` | [ ] |  | [ ] |
 | `GHL_LOCATION_ID` | [ ] |  | [ ] |

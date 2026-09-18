@@ -82,6 +82,41 @@ export async function fetchProductionRecord(
   return selectExactProductionRecord(data.records ?? [], searchTerm);
 }
 
+type GhlTagContact = { id?: string };
+
+/**
+ * Finds current contacts with one named tag in one linked dealership. It is a
+ * read-only lookup and returns IDs only so the caller can immediately protect
+ * them with a one-way fingerprint before saving a dashboard total.
+ */
+export async function listDealershipContactIdsByTag(input: {
+  locationId: string;
+  apiKey: string;
+  tag: string;
+}): Promise<string[]> {
+  const ids = new Set<string>();
+  for (let page = 1; page <= 20; page += 1) {
+    const response = await fetch(`${GHL_BASE_URL}/contacts/search`, {
+      method: "POST",
+      headers: ghlHeaders(input.apiKey, "v3"),
+      body: JSON.stringify({
+        locationId: input.locationId,
+        page,
+        pageLimit: 100,
+        filters: [{ field: "tags", operator: "contains", value: input.tag }],
+      }),
+    });
+    const data = await readJson<{ contacts?: GhlTagContact[] }>(response, "contact tag lookup");
+    const contacts = data.contacts ?? [];
+    contacts.forEach(contact => {
+      const id = contact.id?.trim();
+      if (id) ids.add(id);
+    });
+    if (contacts.length < 100) break;
+  }
+  return Array.from(ids);
+}
+
 /**
  * Searches can return partial historical matches. The relay must only use the
  * record whose Production name normalizes exactly to the channel/search term.

@@ -1,0 +1,1 @@
+ALTER TABLE `relay_campaign_activity_events` MODIFY COLUMN `source` enum('qr_visit','qr_appointment','phone_appointment','sms_appointment','oneclick_appointment','ai_booked_appointment','qr_show') NOT NULL;

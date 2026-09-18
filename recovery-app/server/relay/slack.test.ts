@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createOrUpdateProductionCanvas, downloadSlackPdf, openProductionCanvasRepairModal, refreshKnownProductionCanvas } from "./slack";
+import {
+  createActivityDashboardCanvas,
+  createOrUpdateProductionCanvas,
+  downloadSlackPdf,
+  openProductionCanvasRepairModal,
+  refreshKnownActivityDashboardCanvas,
+  refreshKnownProductionCanvas,
+  setSlackCanvasChannelReadAccess,
+} from "./slack";
 
 const originalFetch = global.fetch;
 const originalEnv = { ...process.env };
@@ -75,6 +83,43 @@ describe("Super Admin Canvas repair picker", () => {
     expect(request.trigger_id).toBe("trigger");
     expect(JSON.parse(request.view.private_metadata)).toEqual({ superAdminChannelId: "C-super-admin" });
     expect(request.view.blocks[1].element.options[0].value).toBe("42");
+  });
+});
+
+describe("separate Activity Dashboard Canvas", () => {
+  it("creates a titled separate Canvas tab without touching the Production Canvas", async () => {
+    process.env.SLACK_BOT_TOKEN = "test-token";
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true, canvas_id: "F-activity" }), { status: 200 }));
+    global.fetch = fetchMock as typeof fetch;
+
+    await expect(createActivityDashboardCanvas("C123", "# Activity Dashboard")).resolves.toBe("F-activity");
+    expect(fetchMock.mock.calls).toHaveLength(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("canvases.create");
+    const request = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    expect(request.title).toBe("Activity Dashboard");
+    expect(request.channel_id).toBe("C123");
+  });
+
+  it("edits a saved Activity Dashboard in place and never creates a replacement tab", async () => {
+    process.env.SLACK_BOT_TOKEN = "test-token";
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ ok: false, error: "canvas_not_found" }), { status: 200 }));
+    global.fetch = fetchMock as typeof fetch;
+
+    await expect(refreshKnownActivityDashboardCanvas("F-activity", "# Activity Dashboard")).resolves.toBe(false);
+    expect(fetchMock.mock.calls).toHaveLength(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("canvases.edit");
+    expect(fetchMock.mock.calls[0]?.[0]).not.toContain("canvases.create");
+  });
+
+  it("makes the separate dashboard channel-readable after creation", async () => {
+    process.env.SLACK_BOT_TOKEN = "test-token";
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    global.fetch = fetchMock as typeof fetch;
+
+    await setSlackCanvasChannelReadAccess("F-activity", "C123");
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("canvases.access.set");
+    const request = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    expect(request).toEqual({ canvas_id: "F-activity", access_level: "read", channel_ids: ["C123"] });
   });
 });
 

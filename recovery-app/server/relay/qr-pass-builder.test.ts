@@ -3,7 +3,7 @@ import { createQrPassOutputs, createSmsQrUrl } from "./qr-pass-builder";
 
 describe("QR Pass Page Builder output", () => {
   const outputs = createQrPassOutputs({
-    apiKey: "pit-selected-dealer-key",
+    apiKey: "test-api-key",
     locationId: "selected-location",
     qrPassUrl: "adoevent.com/qrpass-page",
   });
@@ -19,8 +19,8 @@ describe("QR Pass Page Builder output", () => {
   it("injects only the selected dealer configuration into the copy-ready modules", () => {
     expect(outputs.editContact).toContain('LOCATION_ID="selected-location"');
     expect(outputs.campaignReference).toContain('QR_CAMPAIGN_LOCATION_ID="selected-location"');
-    expect(outputs.editContact).toContain("pit-selected-dealer-key");
-    expect(outputs.campaignReference).toContain("pit-selected-dealer-key");
+    expect(outputs.editContact).toContain("test-api-key");
+    expect(outputs.campaignReference).toContain("test-api-key");
   });
 
   it("retains the exact QR appointment data field order", () => {

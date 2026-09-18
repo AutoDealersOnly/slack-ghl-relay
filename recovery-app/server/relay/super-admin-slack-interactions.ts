@@ -2,15 +2,13 @@ import type { Request, Response } from "express";
 import { Router } from "express";
 import { getRelayConfig } from "./config";
 import {
-  postAbcTestCanvasRefreshResult,
   keepOneCampaignChannelOpen,
   openCanvasRepairPicker,
+  openPendingArchiveManager,
   postCanvasRepairResult,
-  refreshAbcTestProductionCanvas,
   repairOneProductionCanvas,
-  SUPER_ADMIN_CANVAS_REPAIR_ENABLED,
-  SUPER_ADMIN_REFRESH_ABC_TEST_CANVAS_ACTION,
   SUPER_ADMIN_KEEP_OPEN_ACTION,
+  SUPER_ADMIN_MANAGE_ARCHIVES_ACTION,
   SUPER_ADMIN_REPAIR_CANVAS_ACTION,
 } from "./super-admin";
 import { isAuthorizedSlackRequest } from "./security";
@@ -20,7 +18,6 @@ type SlackBlockAction = { action_id?: string; value?: string };
 type SlackInteractionPayload = {
   type?: string;
   channel?: { id?: string };
-  message?: { ts?: string };
   trigger_id?: string;
   actions?: SlackBlockAction[];
   view?: {
@@ -30,79 +27,53 @@ type SlackInteractionPayload = {
   };
 };
 
-export type KeepOpenInteraction = { superAdminChannelId: string; campaignId: number; messageTs: string };
-export type CanvasRepairLauncherInteraction = { superAdminChannelId: string; triggerId: string };
-export type CanvasRepairSubmission = { superAdminChannelId: string; campaignId: number };
-export type AbcTestCanvasRefreshInteraction = { superAdminChannelId: string };
+export type KeepOpenInteraction = { superAdminChannelId: string; campaignId: number };
+export type SuperAdminLauncherInteraction = { superAdminChannelId: string; triggerId: string };
+export type SuperAdminCampaignSubmission = { superAdminChannelId: string; campaignId: number };
 
-const CANVAS_REPAIR_CALLBACK_ID = "super_admin_repair_production_canvas_submit";
+const CANVAS_REFRESH_CALLBACK_ID = "super_admin_repair_production_canvas_submit";
+const ARCHIVE_MANAGER_CALLBACK_ID = "super_admin_manage_pending_archives_submit";
 
-/** Parses only the one supported Super Admin action from Slack’s signed form payload. */
-export function parseKeepOpenInteraction(payloadText: unknown): KeepOpenInteraction | null {
+const parseInteractionPayload = (payloadText: unknown): SlackInteractionPayload | null => {
   if (typeof payloadText !== "string" || payloadText.length > 25_000) return null;
-  let payload: SlackInteractionPayload;
   try {
-    payload = JSON.parse(payloadText) as SlackInteractionPayload;
+    return JSON.parse(payloadText) as SlackInteractionPayload;
   } catch {
     return null;
   }
-  const action = payload.actions?.[0];
+};
+
+/** Parses the legacy individual Keep Open card while it is being retired; it still rechecks current archive state. */
+export function parseKeepOpenInteraction(payloadText: unknown): KeepOpenInteraction | null {
+  const payload = parseInteractionPayload(payloadText);
+  const action = payload?.actions?.[0];
   const campaignId = Number(action?.value);
-  const superAdminChannelId = payload.channel?.id?.trim() ?? "";
-  const messageTs = payload.message?.ts?.trim() ?? "";
+  const superAdminChannelId = payload?.channel?.id?.trim() ?? "";
   if (
-    payload.type !== "block_actions" ||
+    payload?.type !== "block_actions" ||
     action?.action_id !== SUPER_ADMIN_KEEP_OPEN_ACTION ||
     !Number.isSafeInteger(campaignId) ||
     campaignId <= 0 ||
-    !superAdminChannelId ||
-    !messageTs
+    !superAdminChannelId
   ) return null;
-  return { superAdminChannelId, campaignId, messageTs };
+  return { superAdminChannelId, campaignId };
 }
 
-/** Parses only the signed private-channel button that opens the one-campaign repair picker. */
-export function parseCanvasRepairLauncherInteraction(payloadText: unknown): CanvasRepairLauncherInteraction | null {
-  if (typeof payloadText !== "string" || payloadText.length > 25_000) return null;
-  let payload: SlackInteractionPayload;
-  try {
-    payload = JSON.parse(payloadText) as SlackInteractionPayload;
-  } catch {
-    return null;
-  }
-  const action = payload.actions?.[0];
-  const superAdminChannelId = payload.channel?.id?.trim() ?? "";
-  const triggerId = payload.trigger_id?.trim() ?? "";
-  if (payload.type !== "block_actions" || action?.action_id !== SUPER_ADMIN_REPAIR_CANVAS_ACTION || !superAdminChannelId || !triggerId) return null;
+/** Parses either one permanent Super Admin launcher button. */
+export function parseSuperAdminLauncherInteraction(payloadText: unknown, actionId: string): SuperAdminLauncherInteraction | null {
+  const payload = parseInteractionPayload(payloadText);
+  const action = payload?.actions?.[0];
+  const superAdminChannelId = payload?.channel?.id?.trim() ?? "";
+  const triggerId = payload?.trigger_id?.trim() ?? "";
+  if (payload?.type !== "block_actions" || action?.action_id !== actionId || !superAdminChannelId || !triggerId) return null;
   return { superAdminChannelId, triggerId };
 }
 
-/** Parses only the signed ABC Test-only Canvas refresh button. */
-export function parseAbcTestCanvasRefreshInteraction(payloadText: unknown): AbcTestCanvasRefreshInteraction | null {
-  if (typeof payloadText !== "string" || payloadText.length > 25_000) return null;
-  let payload: SlackInteractionPayload;
-  try {
-    payload = JSON.parse(payloadText) as SlackInteractionPayload;
-  } catch {
-    return null;
-  }
-  const action = payload.actions?.[0];
-  const superAdminChannelId = payload.channel?.id?.trim() ?? "";
-  if (payload.type !== "block_actions" || action?.action_id !== SUPER_ADMIN_REFRESH_ABC_TEST_CANVAS_ACTION || !superAdminChannelId) return null;
-  return { superAdminChannelId };
-}
-
-/** Parses only a submitted repair modal carrying the private Super Admin channel context. */
-export function parseCanvasRepairSubmission(payloadText: unknown): CanvasRepairSubmission | null {
-  if (typeof payloadText !== "string" || payloadText.length > 25_000) return null;
-  let payload: SlackInteractionPayload;
-  try {
-    payload = JSON.parse(payloadText) as SlackInteractionPayload;
-  } catch {
-    return null;
-  }
-  const view = payload.view;
-  const selected = view?.state?.values?.super_admin_canvas_repair_campaign?.super_admin_canvas_repair_campaign_select?.selected_option?.value;
+/** Parses a submitted private Super Admin modal that selects exactly one current campaign. */
+export function parseSuperAdminCampaignSubmission(payloadText: unknown, callbackId: string, blockId: string, actionId: string): SuperAdminCampaignSubmission | null {
+  const payload = parseInteractionPayload(payloadText);
+  const view = payload?.view;
+  const selected = view?.state?.values?.[blockId]?.[actionId]?.selected_option?.value;
   const campaignId = Number(selected);
   let superAdminChannelId = "";
   try {
@@ -111,7 +82,7 @@ export function parseCanvasRepairSubmission(payloadText: unknown): CanvasRepairS
   } catch {
     return null;
   }
-  if (payload.type !== "view_submission" || view?.callback_id !== CANVAS_REPAIR_CALLBACK_ID || !superAdminChannelId || !Number.isSafeInteger(campaignId) || campaignId <= 0) return null;
+  if (payload?.type !== "view_submission" || view?.callback_id !== callbackId || !superAdminChannelId || !Number.isSafeInteger(campaignId) || campaignId <= 0) return null;
   return { superAdminChannelId, campaignId };
 }
 
@@ -131,68 +102,71 @@ superAdminSlackInteractionRouter.post("/", async (req: SlackInteractionRequest, 
   }
 
   const payloadText = (req.body as { payload?: unknown }).payload;
-  const abcTestRefresh = parseAbcTestCanvasRefreshInteraction(payloadText);
-  if (abcTestRefresh) {
-    res.status(200).json({ response_type: "ephemeral", text: "Refreshing the existing ABC Test Production Canvas only. No Canvas will be created." });
-    void (async () => {
-      try {
-        const result = await refreshAbcTestProductionCanvas(abcTestRefresh);
-        await postAbcTestCanvasRefreshResult({ ...abcTestRefresh, result });
-      } catch {
-        await postAbcTestCanvasRefreshResult({ ...abcTestRefresh, result: "not_allowed" }).catch(() => undefined);
-      }
-    })();
-    return;
-  }
-
-  const launcher = parseCanvasRepairLauncherInteraction(payloadText);
-  if (launcher) {
-    if (!SUPER_ADMIN_CANVAS_REPAIR_ENABLED) {
-      res.status(200).json({ response_type: "ephemeral", text: "Production Canvas repair is disabled for active campaign channels." });
-      return;
-    }
+  const archiveManager = parseSuperAdminLauncherInteraction(payloadText, SUPER_ADMIN_MANAGE_ARCHIVES_ACTION);
+  if (archiveManager) {
     try {
-      const result = await openCanvasRepairPicker(launcher);
-      if (result === "opened") {
-        res.status(200).send("");
-      } else {
-        res.status(200).json({ response_type: "ephemeral", text: "This Canvas repair control is not available here." });
-      }
+      const result = await openPendingArchiveManager(archiveManager);
+      if (result === "opened") res.status(200).send("");
+      else if (result === "no_campaigns") res.status(200).json({ response_type: "ephemeral", text: "There are no campaign channels currently scheduled to archive." });
+      else res.status(200).json({ response_type: "ephemeral", text: "This archive control is not available here." });
     } catch {
-      res.status(200).json({ response_type: "ephemeral", text: "The Canvas repair picker could not be opened. Contact admin before retrying." });
+      res.status(200).json({ response_type: "ephemeral", text: "The archive manager could not be opened. Contact admin before retrying." });
     }
     return;
   }
 
-  const submission = parseCanvasRepairSubmission(payloadText);
-  if (submission) {
-    if (!SUPER_ADMIN_CANVAS_REPAIR_ENABLED) {
-      res.status(200).json({ response_action: "clear" });
-      return;
+  const archiveSubmission = parseSuperAdminCampaignSubmission(
+    payloadText,
+    ARCHIVE_MANAGER_CALLBACK_ID,
+    "super_admin_pending_archive_campaign",
+    "super_admin_pending_archive_campaign_select"
+  );
+  if (archiveSubmission) {
+    res.status(200).json({ response_action: "clear" });
+    void keepOneCampaignChannelOpen(archiveSubmission).catch(() => undefined);
+    return;
+  }
+
+  const refreshLauncher = parseSuperAdminLauncherInteraction(payloadText, SUPER_ADMIN_REPAIR_CANVAS_ACTION);
+  if (refreshLauncher) {
+    try {
+      const result = await openCanvasRepairPicker(refreshLauncher);
+      if (result === "opened") res.status(200).send("");
+      else if (result === "no_campaigns") res.status(200).json({ response_type: "ephemeral", text: "There are no campaign Canvases available to refresh." });
+      else res.status(200).json({ response_type: "ephemeral", text: "This Canvas refresh control is not available here." });
+    } catch {
+      res.status(200).json({ response_type: "ephemeral", text: "The Canvas refresh picker could not be opened. Contact admin before retrying." });
     }
+    return;
+  }
+
+  const refreshSubmission = parseSuperAdminCampaignSubmission(
+    payloadText,
+    CANVAS_REFRESH_CALLBACK_ID,
+    "super_admin_canvas_repair_campaign",
+    "super_admin_canvas_repair_campaign_select"
+  );
+  if (refreshSubmission) {
     res.status(200).json({ response_action: "clear" });
     void (async () => {
       try {
-        const result = await repairOneProductionCanvas(submission);
-        await postCanvasRepairResult({ ...submission, result });
+        const result = await repairOneProductionCanvas(refreshSubmission);
+        await postCanvasRepairResult({ ...refreshSubmission, result });
       } catch {
-        await postCanvasRepairResult({ ...submission, result: "not_allowed" }).catch(() => undefined);
+        await postCanvasRepairResult({ ...refreshSubmission, result: "not_allowed" }).catch(() => undefined);
       }
     })();
     return;
   }
 
-  const input = parseKeepOpenInteraction(payloadText);
-  if (!input) {
-    res.status(200).json({ response_type: "ephemeral", text: "This Super Admin action is not available." });
+  const legacyKeepOpen = parseKeepOpenInteraction(payloadText);
+  if (legacyKeepOpen) {
+    res.status(200).json({ response_type: "ephemeral", text: "Checking this campaign archive now." });
+    void keepOneCampaignChannelOpen(legacyKeepOpen).catch(() => undefined);
     return;
   }
 
-  // Slack requires an acknowledgment within three seconds. The action itself
-  // rechecks the saved private channel, bot message, pending schedule, and
-  // one-click claim before cancelling anything.
-  res.status(200).json({ response_type: "ephemeral", text: "Checking this campaign archive now." });
-  void keepOneCampaignChannelOpen(input).catch(() => undefined);
+  res.status(200).json({ response_type: "ephemeral", text: "This Super Admin action is not available." });
 });
 
 export { superAdminSlackInteractionRouter };

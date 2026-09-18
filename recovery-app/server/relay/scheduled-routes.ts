@@ -8,10 +8,12 @@ import {
   failMailpieceImageJobRun,
   getCampaignById,
   getArchiveReconciliationJobByTaskUid,
+  getActivityDashboardRefreshJobByTaskUid,
   getCampaignByScheduledTask,
   getMailpieceImageJobByTaskUid,
   logRelayAction,
   recordArchiveReconciliationRun,
+  recordActivityDashboardRefreshRun,
   updateCampaignArchive,
 } from "./db";
 import { reconcileActiveCampaignArchiveRegistrations } from "./archive-reconciliation";
@@ -21,6 +23,7 @@ import { postSlackMessage } from "./slack";
 import { uploadCampaignMailpieceImages } from "./mailpiece-images";
 import { fetchProductionRecord } from "./ghl";
 import { markSuperAdminArchiveCompleted } from "./super-admin";
+import { refreshOpenActivityDashboards } from "./activity-dashboard";
 
 const scheduledRelayRouter = Router();
 export const ARCHIVE_WARNING_MESSAGE = "This channel is scheduled to archive tomorrow. Contact admin if the campaign needs to remain open.";
@@ -114,6 +117,35 @@ scheduledRelayRouter.post("/archive-reconcile", async (req: Request, res: Respon
   } catch (error) {
     const detail = redactErrorDetail(error);
     res.status(500).json({ error: "archive reconciliation failed", detail, timestamp: new Date().toISOString() });
+  }
+});
+
+/** Refreshes only saved, still-open ABC Test Activity Dashboard Canvases every fifteen minutes. */
+scheduledRelayRouter.post("/activity-dashboard-refresh", async (req: Request, res: Response) => {
+  try {
+    const user = await authenticateCron(req, res);
+    if (!user) return;
+    const job = await getActivityDashboardRefreshJobByTaskUid(user.taskUid!);
+    if (!job || !job.isEnabled) {
+      res.json({ ok: true, skipped: "unknown_or_disabled_activity_dashboard_job" });
+      return;
+    }
+    const summary = await refreshOpenActivityDashboards();
+    await recordActivityDashboardRefreshRun(user.taskUid!, JSON.stringify(summary));
+    await logRelayAction({
+      action: "activity_dashboard_refresh",
+      outcome: summary.failed > 0 ? "failed" : "success",
+      detail: `Refreshed ${summary.refreshed}; skipped ${summary.skipped}; failed ${summary.failed}.`,
+    });
+    if (summary.failed > 0) {
+      res.status(500).json({ error: "activity dashboard refresh had failures", summary, timestamp: new Date().toISOString() });
+      return;
+    }
+    res.json({ ok: true, summary });
+  } catch (error) {
+    const detail = redactErrorDetail(error);
+    await logRelayAction({ action: "activity_dashboard_refresh", outcome: "failed", detail }).catch(() => undefined);
+    res.status(500).json({ error: "activity dashboard refresh failed", detail, timestamp: new Date().toISOString() });
   }
 });
 

@@ -72,7 +72,7 @@ const locationInput = z.string().trim().regex(/^[A-Za-z0-9_-]{6,128}$/, "Invalid
 const contactIdInput = z.string().trim().regex(/^[A-Za-z0-9_-]{6,255}$/, "Invalid contact reference.");
 const textInput = (max: number) => z.string().trim().max(max).default("");
 
-const contactFormInput = z.object({
+export const pinLookupContactFormInput = z.object({
   firstName: textInput(120),
   lastName: textInput(120),
   email: textInput(254),
@@ -88,8 +88,8 @@ export const pinLookupBootstrapInput = accessInput.extend({ locationId: location
 export const pinLookupPinSearchInput = pinLookupBootstrapInput.extend({ pin: z.string().trim().min(1).max(128) });
 export const pinLookupTextSearchInput = pinLookupBootstrapInput.extend({ query: z.string().trim().min(1).max(255) });
 export const pinLookupLoadInput = pinLookupBootstrapInput.extend({ contactId: contactIdInput });
-export const pinLookupSaveInput = pinLookupLoadInput.extend({ form: contactFormInput });
-export const pinLookupCreateInput = pinLookupBootstrapInput.extend({ pin: z.string().trim().max(128).optional(), form: contactFormInput });
+export const pinLookupSaveInput = pinLookupLoadInput.extend({ form: pinLookupContactFormInput });
+export const pinLookupCreateInput = pinLookupBootstrapInput.extend({ pin: z.string().trim().max(128).optional(), form: pinLookupContactFormInput });
 const opportunityStatusInput = z.enum(["open", "won", "lost", "abandoned"]);
 const opportunityFormInput = z.object({
   opportunityId: contactIdInput.optional(),
@@ -153,7 +153,7 @@ function cleanCustomFields(values: Record<string, string>, fields: PinLookupFiel
 }
 
 export function buildPinLookupContactPayload(
-  form: z.infer<typeof contactFormInput>,
+  form: z.infer<typeof pinLookupContactFormInput>,
   fields: PinLookupFieldMap,
   options: { includeLocationId?: string; pin?: string } = {}
 ) {
@@ -243,6 +243,39 @@ async function resolveContext(access: string, locationId: string): Promise<Deale
   const apiKey = property(dealership, "api_key");
   if (!apiKey) {
     throw new TRPCError({ code: "PRECONDITION_FAILED", message: "This dealership is missing its protected PIN Lookup connection." });
+  }
+  const response = await fetch(`${GHL_BASE_URL}/locations/${encodeURIComponent(locationId)}/customFields?model=contact`, {
+    headers: ghlHeaders(apiKey, GHL_VERSION),
+  });
+  const body = await readJson<{ customFields?: GhlCustomField[] }>(response, "custom-field setup");
+  const fields: PinLookupFieldMap = {};
+  for (const field of body.customFields ?? []) {
+    const key = normalizeFieldKey(text(field.fieldKey));
+    if (isKnownField(key) && field.id) fields[key] = field.id;
+  }
+  const dealershipAddress = [property(dealership, "street_address"), property(dealership, "city"), property(dealership, "state"), property(dealership, "zip")]
+    .filter(Boolean)
+    .join(", ");
+  return {
+    locationId,
+    dealershipName: property(dealership, "dealership_name") || "Dealership",
+    dealershipAddress,
+    dealershipHours: property(dealership, "hours"),
+    apiKey,
+    fields,
+  };
+}
+
+async function resolveContextByDealershipRecordId(dealershipRecordId: string): Promise<DealerContext> {
+  const matches = (await getDealershipRecords()).filter(record => text(record.id) === dealershipRecordId);
+  if (matches.length !== 1) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "The selected test dealership is not available." });
+  }
+  const dealership = matches[0];
+  const locationId = property(dealership, "loc_id");
+  const apiKey = property(dealership, "api_key");
+  if (!locationId || !apiKey) {
+    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "The selected test dealership is not configured for contact lookup." });
   }
   const response = await fetch(`${GHL_BASE_URL}/locations/${encodeURIComponent(locationId)}/customFields?model=contact`, {
     headers: ghlHeaders(apiKey, GHL_VERSION),
@@ -454,8 +487,31 @@ export async function searchPinCode(access: string, locationId: string, pin: str
   return { kind: "matches" as const, contacts };
 }
 
+/** Used only after the separate active-call test flow validates its access and selected live call. */
+export async function searchPinCodeForDealershipRecord(dealershipRecordId: string, pin: string) {
+  if (PLACEHOLDER_PINS.has(pin.trim())) return { kind: "fallback" as const, contacts: [] as PinLookupContactSummary[] };
+  const context = await resolveContextByDealershipRecordId(dealershipRecordId);
+  const pinFieldId = context.fields.pin_code;
+  if (!pinFieldId) {
+    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "This subaccount does not have the required PIN Code custom field." });
+  }
+  const contacts = await searchContacts(context, {
+    filters: [{ field: `customFields.${pinFieldId}`, operator: "eq", value: pin.trim() }],
+    pageLimit: 5,
+  }, "PIN lookup");
+  if (!contacts.length) return { kind: "fallback" as const, contacts };
+  if (contacts.length === 1) return { kind: "contact" as const, contact: await getContact(context, contacts[0].id) };
+  return { kind: "matches" as const, contacts };
+}
+
 export async function searchPinLookupByPhone(access: string, locationId: string, phone: string) {
   const context = await resolveContext(access, locationId);
+  return searchContacts(context, { filters: [{ field: "phone", operator: "eq", value: phone.trim() }], pageLimit: 10 }, "phone search");
+}
+
+/** Used only after the separate active-call test flow validates its access and selected live call. */
+export async function searchPinLookupByPhoneForDealershipRecord(dealershipRecordId: string, phone: string) {
+  const context = await resolveContextByDealershipRecordId(dealershipRecordId);
   return searchContacts(context, { filters: [{ field: "phone", operator: "eq", value: phone.trim() }], pageLimit: 10 }, "phone search");
 }
 
@@ -472,13 +528,43 @@ export async function loadPinLookupContact(access: string, locationId: string, c
   return getContact(await resolveContext(access, locationId), contactId);
 }
 
+/** Used only after the separate active-call test flow validates its access and selected live call. */
+export async function loadPinLookupContactForDealershipRecord(dealershipRecordId: string, contactId: string) {
+  return getContact(await resolveContextByDealershipRecordId(dealershipRecordId), contactId);
+}
+
 export async function savePinLookupContact(
   access: string,
   locationId: string,
   contactId: string,
-  form: z.infer<typeof contactFormInput>
+  form: z.infer<typeof pinLookupContactFormInput>
 ) {
   const context = await resolveContext(access, locationId);
+  await getContact(context, contactId);
+  const payload = buildPinLookupContactPayload(form, context.fields);
+  if (!Object.keys(payload).length) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Enter at least one value before saving." });
+  }
+  const response = await fetch(`${GHL_BASE_URL}/contacts/${encodeURIComponent(contactId)}`, {
+    method: "PUT",
+    headers: ghlHeaders(context.apiKey, GHL_VERSION),
+    body: JSON.stringify(payload),
+  });
+  const body = await readJson<{ contact?: GhlContact }>(response, "contact update");
+  const contact = body.contact;
+  if (!contact || !contactBelongsToLocation(contact, context.locationId)) {
+    throw new TRPCError({ code: "BAD_GATEWAY", message: "GoHighLevel did not return the updated dealership contact." });
+  }
+  return toContact(contact, context.fields);
+}
+
+/** Used only after the separate active-call test flow validates its access and selected live call. */
+export async function savePinLookupContactForDealershipRecord(
+  dealershipRecordId: string,
+  contactId: string,
+  form: z.infer<typeof pinLookupContactFormInput>
+) {
+  const context = await resolveContextByDealershipRecordId(dealershipRecordId);
   await getContact(context, contactId);
   const payload = buildPinLookupContactPayload(form, context.fields);
   if (!Object.keys(payload).length) {
@@ -501,7 +587,7 @@ export async function createPinLookupContact(
   access: string,
   locationId: string,
   pin: string | undefined,
-  form: z.infer<typeof contactFormInput>
+  form: z.infer<typeof pinLookupContactFormInput>
 ) {
   const context = await resolveContext(access, locationId);
   if (!form.firstName && !form.lastName && !form.email && !form.phone) {

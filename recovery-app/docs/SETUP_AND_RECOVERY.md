@@ -2,7 +2,7 @@
 
 This guide is written for the person restoring or operating the relay. It explains what must be in place before a live workflow is turned on, what each setting controls, and how to recover safely after an interruption. It intentionally names settings but never contains their values.
 
-> **Rule of operation:** A tested change is not finished until the source, setup guide, workflow map, and database migration are safely backed up in company GitHub. Access values belong only in the designated private recovery vault and protected project settings.
+> **Rule of operation:** A tested change is not finished until the source, setup guide, workflow map, and database migration are safely backed up in company GitHub. Access values belong only in the designated Manus Keys and Codes and protected project settings.
 
 ## 1. What this relay does
 
@@ -20,14 +20,14 @@ Add these values in the project’s protected settings area. Do **not** place th
 | `GHL_LOCATION_ID` | Tells the relay which ADO location owns the Production records. | ADO subaccount/location settings. |
 | `SLACK_BOT_TOKEN` | Lets the relay create channels and canvases, invite members, message, and archive. | Slack API app → **OAuth & Permissions**. |
 | `SLACK_SIGNING_SECRET` | Verifies any future requests that originate in Slack. | Slack API app → **Basic Information**. |
-| `GHL_WEBHOOK_SHARED_SECRET` | Proves that a relay request came from a rebuilt GHL workflow. | Create a new long random value; store it in the private recovery vault. |
+| `GHL_WEBHOOK_SHARED_SECRET` | Proves that a relay request came from a rebuilt GHL workflow. | Create a new long random value; store it in the Manus Keys and Codes. |
 | `SLACK_NOTIFICATION_CHANNEL_ID` | Receives the operational completion and archive notices. | Open the selected Slack channel and copy its channel ID. |
 | `SLACK_DEALS_USERGROUP_ID` | Identifies the Slack group invited to new campaign channels. | Slack workspace user-group administration. |
 | `SLACK_ALWAYS_INVITEE_USER_IDS` | Comma-separated people who are always invited to new campaign channels. | Each person’s Slack member ID. |
-| `SLACK_PROOF_REQUEST_USER_ID` | Slack member who receives Request Proof notices. | David’s Slack member ID in the private recovery vault. |
-| `SLACK_PROOFING_NEEDED_USERGROUP_ID` | Slack group tagged when Proofing Needed is selected. | The Deals user-group ID in the private recovery vault. |
-| `SLACK_PROOF_APPROVED_USER_ID` | Slack member who receives Approved to Upload notices. | David’s Slack member ID in the private recovery vault. |
-| `SLACK_PROOF_SENT_TO_PRINT_USER_ID` | Slack member who receives Sent to Print notices. | Brian’s Slack member ID in the private recovery vault. |
+| `SLACK_PROOF_REQUEST_USER_ID` | Slack member who receives Request Proof notices. | David’s Slack member ID in the Manus Keys and Codes. |
+| `SLACK_PROOFING_NEEDED_USERGROUP_ID` | Slack group tagged when Proofing Needed is selected. | The Deals user-group ID in the Manus Keys and Codes. |
+| `SLACK_PROOF_APPROVED_USER_ID` | Slack member who receives Approved to Upload notices. | David’s Slack member ID in the Manus Keys and Codes. |
+| `SLACK_PROOF_SENT_TO_PRINT_USER_ID` | Slack member who receives Sent to Print notices. | Brian’s Slack member ID in the Manus Keys and Codes. |
 
 ### Recovering the Slack values
 
@@ -35,8 +35,8 @@ Open [Slack API — Your Apps](https://api.slack.com/apps), select the **GHL** a
 
 | Needed item | Click-by-click location | Important note |
 |---|---|---|
-| Slack Signing Secret | **Basic Information** → **App Credentials** → **Signing Secret** → **Show** | Record it only in the private recovery vault and protected settings. Never regenerate it until the replacement has been updated everywhere that uses it. |
-| Slack Bot Token | **OAuth & Permissions** → **Bot User OAuth Token** | Copy it only into protected settings and the private recovery vault. Reinstall the app after scope changes. |
+| Slack Signing Secret | **Basic Information** → **App Credentials** → **Signing Secret** → **Show** | Record it only in the Manus Keys and Codes and protected settings. Never regenerate it until the replacement has been updated everywhere that uses it. |
+| Slack Bot Token | **OAuth & Permissions** → **Bot User OAuth Token** | Copy it only into protected settings and the Manus Keys and Codes. Reinstall the app after scope changes. |
 | Notification Channel ID | Open the channel in Slack → channel name → **About** → channel ID, or copy the channel link and use the final channel identifier. | This is an identifier, not a secret, but it still does not belong in public code. |
 | Deals User Group ID | Slack administration → user groups → open the group → copy its ID or its administrative URL identifier. | Use the **@deals** group only if that remains the correct operating group. |
 | Always-invite User IDs | Open each person’s Slack profile → **More** → **Copy member ID**. | Separate IDs with commas in protected settings. |
@@ -86,7 +86,7 @@ If the campaign end date changes, send the **Reschedule archive** workflow. If t
 
 ## 6. Rotation and incident response
 
-If a token or key is believed to be exposed, replace it in this order: create the replacement in the source system, update the protected project setting, test the relay against **ABC Dealer**, update the private recovery vault with the new value and rotation date, and only then revoke the old value. Never write the old or new value into GitHub.
+If a token or key is believed to be exposed, replace it in this order: create the replacement in the source system, update the protected project setting, test the relay against **ABC Dealer**, update the Manus Keys and Codes with the new value and rotation date, and only then revoke the old value. Never write the old or new value into GitHub.
 
 For a failed live action, first review the status page’s safe message. Then check the matching workflow name, the protected-setting readiness, the record relationship between Production and Dealership, and the Slack app’s scopes. If the action must be retried, change the underlying cause first; replaying an unchanged failure only adds noise.
 
@@ -94,7 +94,7 @@ For a failed live action, first review the status page’s safe message. Then ch
 
 1. Clone the approved company GitHub repository.
 2. Restore the database schema using the tracked migration files in `drizzle/`.
-3. Add the protected settings from the private recovery vault; do not copy values from GitHub because they are deliberately absent.
+3. Add the protected settings from the Manus Keys and Codes; do not copy values from GitHub because they are deliberately absent.
 4. Deploy the project, then confirm the private status page can load.
 5. Recreate the GHL workflows from the table in this guide using the new deployed relay address and the shared-secret header.
 6. Run the safe test sequence in ABC Dealer before enabling a live ADO workflow.

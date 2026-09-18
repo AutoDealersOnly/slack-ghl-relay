@@ -1,0 +1,1 @@
+ALTER TABLE `relay_super_admin_channels` ADD `archiveManagerMessageTs` varchar(32);

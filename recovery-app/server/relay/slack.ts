@@ -202,6 +202,39 @@ export async function refreshKnownProductionCanvas(canvasId: string, markdown: s
   }
 }
 
+/**
+ * Creates a separate Activity Dashboard tab. This deliberately has no fallback
+ * to the channel-default Canvas, so it can never replace or relink Production.
+ */
+export async function createActivityDashboardCanvas(channelId: string, markdown: string): Promise<string> {
+  const data = await slackApi<{ canvas_id: string }>("canvases.create", {
+    channel_id: channelId,
+    title: "Activity Dashboard",
+    document_content: { type: "markdown", markdown },
+  });
+  if (!data.canvas_id) throw new Error("Slack did not return the new Activity Dashboard Canvas reference");
+  return data.canvas_id;
+}
+
+/** Updates a saved Activity Dashboard Canvas only; it never creates or relinks a tab. */
+export async function refreshKnownActivityDashboardCanvas(canvasId: string, markdown: string): Promise<boolean> {
+  try {
+    await slackApi("canvases.edit", {
+      canvas_id: canvasId,
+      changes: [{ operation: "replace", document_content: { type: "markdown", markdown } }],
+    });
+    return true;
+  } catch (error) {
+    if (String(error).includes("canvas_not_found")) return false;
+    throw error;
+  }
+}
+
+/** Makes the dashboard a channel-readable reference tab; the bot retains ownership for scheduled edits. */
+export async function setSlackCanvasChannelReadAccess(canvasId: string, channelId: string): Promise<void> {
+  await slackApi("canvases.access.set", { canvas_id: canvasId, access_level: "read", channel_ids: [channelId] });
+}
+
 /** Creates or refreshes the separate private Super Admin Canvas without affecting campaign Canvases. */
 export async function createOrUpdateSuperAdminCanvas(
   channelId: string,
@@ -252,7 +285,12 @@ export async function updateSlackMessage(channelId: string, messageTs: string, t
   await slackApi("chat.update", { channel: channelId, ts: messageTs, text, blocks, as_user: true });
 }
 
-/** Opens the private Super Admin one-campaign Canvas repair picker from a signed button click. */
+/** Deletes only a bot-authored legacy message from the saved private Super Admin channel. */
+export async function deleteSlackMessage(channelId: string, messageTs: string): Promise<void> {
+  await slackApi("chat.delete", { channel: channelId, ts: messageTs, as_user: true });
+}
+
+/** Opens the private Super Admin one-campaign Canvas refresh picker from a signed button click. */
 export async function openProductionCanvasRepairModal(input: {
   triggerId: string;
   superAdminChannelId: string;
@@ -268,15 +306,15 @@ export async function openProductionCanvasRepairModal(input: {
       type: "modal",
       callback_id: "super_admin_repair_production_canvas_submit",
       private_metadata: JSON.stringify({ superAdminChannelId: input.superAdminChannelId }),
-      title: { type: "plain_text", text: "Repair Production Canvas", emoji: false },
-      submit: { type: "plain_text", text: "Repair Canvas", emoji: false },
+      title: { type: "plain_text", text: "Refresh Production Canvas", emoji: false },
+      submit: { type: "plain_text", text: "Refresh Canvas", emoji: false },
       close: { type: "plain_text", text: "Cancel", emoji: false },
       blocks: [
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: "This checks whether the selected channel’s saved Production Canvas is still attached. If it is already healthy, nothing changes. If it is detached, only that channel’s visible Production Canvas is refreshed.",
+            text: "This updates only the selected channel’s saved Production Canvas. It cannot create or relink a Canvas. If no saved Canvas link exists, it stops without changing the channel.",
           },
         },
         {
@@ -287,6 +325,46 @@ export async function openProductionCanvasRepairModal(input: {
             type: "static_select",
             action_id: "super_admin_canvas_repair_campaign_select",
             placeholder: { type: "plain_text", text: "Select one campaign", emoji: false },
+            options,
+          },
+        },
+      ],
+    },
+  });
+}
+
+/** Opens the one private archive-management picker; the live pending list remains in the Super Admin Canvas. */
+export async function openPendingArchiveManagerModal(input: {
+  triggerId: string;
+  superAdminChannelId: string;
+  candidates: SlackCanvasRepairCandidate[];
+}): Promise<void> {
+  const options = input.candidates.slice(0, 100).map(candidate => ({
+    text: { type: "plain_text", text: `${candidate.channelName} — ${candidate.productionName}`.slice(0, 75), emoji: false },
+    value: String(candidate.id),
+  }));
+  await slackApi("views.open", {
+    trigger_id: input.triggerId,
+    view: {
+      type: "modal",
+      callback_id: "super_admin_manage_pending_archives_submit",
+      private_metadata: JSON.stringify({ superAdminChannelId: input.superAdminChannelId }),
+      title: { type: "plain_text", text: "Manage Pending Archives", emoji: false },
+      submit: { type: "plain_text", text: "Keep Open", emoji: false },
+      close: { type: "plain_text", text: "Cancel", emoji: false },
+      blocks: [
+        {
+          type: "section",
+          text: { type: "mrkdwn", text: "Choose one currently pending campaign only when it must remain open. This cancels that one archive schedule and does not change its Event End date or any other campaign." },
+        },
+        {
+          type: "input",
+          block_id: "super_admin_pending_archive_campaign",
+          label: { type: "plain_text", text: "Campaign channel", emoji: false },
+          element: {
+            type: "static_select",
+            action_id: "super_admin_pending_archive_campaign_select",
+            placeholder: { type: "plain_text", text: "Select one pending campaign", emoji: false },
             options,
           },
         },

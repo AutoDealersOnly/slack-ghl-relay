@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { buildArchiveControlResultMessage, buildPendingArchiveControlMessage, buildSuperAdminCanvas, SUPER_ADMIN_KEEP_OPEN_ACTION } from "./super-admin";
+import {
+  buildArchiveManagerLauncherMessage,
+  buildCanvasRepairLauncherMessage,
+  buildSuperAdminCanvas,
+  SUPER_ADMIN_MANAGE_ARCHIVES_ACTION,
+  SUPER_ADMIN_REPAIR_CANVAS_ACTION,
+} from "./super-admin";
 
 const pendingCampaign = {
   id: 41,
   productionName: "2610 Sample Dealer AME",
   channelName: "2610-sample-dealer-ame",
   channelId: "C-sample",
-  canvasId: null,
+  canvasId: "F-sample",
   dealershipRecordId: null,
   dealershipName: "Sample Dealer",
   eventEndDate: "2026-10-01",
@@ -18,26 +24,28 @@ const pendingCampaign = {
   updatedAt: new Date(),
 };
 
-describe("Super Admin control content", () => {
-  it("keeps the Canvas instructional and limits its first live control to archive holds", () => {
-    const canvas = buildSuperAdminCanvas();
+describe("Super Admin Canvas content", () => {
+  it("keeps the current pending archive list in the Canvas and does not expose protected settings", () => {
+    const canvas = buildSuperAdminCanvas([pendingCampaign]);
     expect(canvas).toContain("# ADO Super Admin");
-    expect(canvas).toContain("Keep Open");
-    expect(canvas).toContain("ABC Test only");
-    expect(canvas).toContain("does not change GoHighLevel workflows");
+    expect(canvas).toContain("Pending campaign-channel archives");
+    expect(canvas).toContain("2610-sample-dealer-ame");
+    expect(canvas).toContain("Manage Pending Archives");
+    expect(canvas).toContain("All automation testing happens in ABC Test only");
     expect(canvas).not.toContain("API key");
   });
 
-  it("builds one Keep Open button with only the related campaign ID", () => {
-    const control = buildPendingArchiveControlMessage(pendingCampaign);
-    expect(control.text).toContain("2610-sample-dealer-ame");
-    expect(JSON.stringify(control.blocks)).toContain(SUPER_ADMIN_KEEP_OPEN_ACTION);
-    expect(JSON.stringify(control.blocks)).toContain('"value":"41"');
+  it("uses one permanent archive-manager button rather than a Keep Open card for every campaign", () => {
+    const launcher = buildArchiveManagerLauncherMessage();
+    expect(launcher.text).toContain("Manage the current campaign channels");
+    expect(JSON.stringify(launcher.blocks)).toContain(SUPER_ADMIN_MANAGE_ARCHIVES_ACTION);
+    expect(JSON.stringify(launcher.blocks)).not.toContain('"value":"41"');
   });
 
-  it("removes the action button after a channel is kept open", () => {
-    const resolved = buildArchiveControlResultMessage(pendingCampaign, "kept_open");
-    expect(resolved.text).toContain("will remain open");
-    expect(JSON.stringify(resolved.blocks)).not.toContain(SUPER_ADMIN_KEEP_OPEN_ACTION);
+  it("states that the Canvas refresh edits only an existing saved Canvas", () => {
+    const launcher = buildCanvasRepairLauncherMessage();
+    expect(launcher.text).toContain("without creating a new Canvas");
+    expect(JSON.stringify(launcher.blocks)).toContain(SUPER_ADMIN_REPAIR_CANVAS_ACTION);
+    expect(JSON.stringify(launcher.blocks)).toContain("cannot create or relink a Canvas");
   });
 });

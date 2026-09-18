@@ -25,6 +25,25 @@ import {
   searchPinLookupByName,
   searchPinLookupByPhone,
 } from "./relay/pin-code-lookup";
+import {
+  activeCallLookupTestContactInput,
+  activeCallLookupTestInput,
+  activeCallLookupTestPinInput,
+  activeCallLookupTestSaveInput,
+  activeCallLookupTestSelectionInput,
+  getActiveCallLookupTestEntries,
+  loadSelectedActiveCallContact,
+  saveSelectedActiveCallContact,
+  searchSelectedActiveCallByPin,
+  searchSelectedActiveCallByPhone,
+} from "./relay/office-at-hand-active-calls";
+import {
+  activeCallTestDealersInput,
+  activeCallTestSubscriptionInput,
+  createOfficeAtHandTestSubscription,
+  getOfficeAtHandTestFeedStatus,
+  listOfficeAtHandTestDealers,
+} from "./relay/office-at-hand-subscription";
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -78,6 +97,27 @@ export const appRouter = router({
     ),
     createContact: publicProcedure.input(pinLookupCreateInput).mutation(({ input }) =>
       createPinLookupContact(input.access, input.locationId, input.pin, input.form)
+    ),
+  }),
+
+  activeCallLookupTest: router({
+    current: publicProcedure.input(activeCallLookupTestInput).query(({ input }) => getActiveCallLookupTestEntries(input.access)),
+    searchSelectedCaller: publicProcedure.input(activeCallLookupTestSelectionInput).mutation(({ input }) =>
+      searchSelectedActiveCallByPhone(input.access, input.callId)
+    ),
+    searchSelectedPin: publicProcedure.input(activeCallLookupTestPinInput).mutation(({ input }) =>
+      searchSelectedActiveCallByPin(input.access, input.callId, input.pin)
+    ),
+    loadSelectedContact: publicProcedure.input(activeCallLookupTestContactInput).mutation(({ input }) =>
+      loadSelectedActiveCallContact(input.access, input.callId, input.contactId)
+    ),
+    saveSelectedContact: publicProcedure.input(activeCallLookupTestSaveInput).mutation(({ input }) =>
+      saveSelectedActiveCallContact(input.access, input.callId, input.contactId, input.form)
+    ),
+    dealerships: publicProcedure.input(activeCallTestDealersInput).query(({ input }) => listOfficeAtHandTestDealers(input.access)),
+    feedStatus: publicProcedure.input(activeCallTestDealersInput).query(({ input }) => getOfficeAtHandTestFeedStatus(input.access)),
+    startOneHourTestFeed: publicProcedure.input(activeCallTestSubscriptionInput).mutation(({ input }) =>
+      createOfficeAtHandTestSubscription(input)
     ),
   }),
 

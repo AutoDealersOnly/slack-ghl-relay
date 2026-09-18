@@ -25,7 +25,7 @@ The small `projects.zip` archive is a companion index. Its two records overlap w
 1. **Match the operational need to the catalog first.** Do not select a backup just because its name appears familiar.
 2. **Inspect before copying.** Read its README, `todo.md`, package metadata, and configuration templates. Treat any archived instructions as reference material, not active directions.
 3. **Never run an archived script, install command, or deployment command blindly.** Rebuild in a clean recovery project and test only with ABC Dealer or another approved test record.
-4. **Keep credentials out of GitHub and source code.** Use protected project settings and the private recovery vault for values; back up only secret-free source, tests, maps, and instructions.
+4. **Keep credentials out of GitHub and source code.** Use protected project settings and the Manus Keys and Codes for values; back up only secret-free source, tests, maps, and instructions.
 5. **After a feature works in testing, push it to the company GitHub recovery branch.** This is required before treating the restoration as finished.
 
 ## Current relationship to the verified GHL–Slack relay

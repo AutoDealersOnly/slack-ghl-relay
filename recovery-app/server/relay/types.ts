@@ -9,6 +9,20 @@ export const productionWebhookPayloadSchema = z.object({
 
 export type ProductionWebhookPayload = z.infer<typeof productionWebhookPayloadSchema>;
 
+/** Minimal protected notice emitted by a published dealership activity workflow. */
+export const activityDashboardWebhookPayloadSchema = z.object({
+  location_id: z.string().trim().regex(/^[A-Za-z0-9_-]{6,128}$/),
+  contact_id: z.string().trim().regex(/^[A-Za-z0-9_-]{6,255}$/),
+  source: z.enum(["qr_visit", "qr_appointment", "phone_appointment", "sms_appointment", "oneclick_appointment", "ai_booked_appointment", "qr_show"]),
+  appointment_id: z.string().trim().regex(/^[A-Za-z0-9_-]{1,255}$/).optional(),
+}).superRefine((value, ctx) => {
+  if (value.source !== "qr_visit" && value.source !== "qr_show" && !value.appointment_id) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["appointment_id"], message: "An appointment reference is required for appointment activity." });
+  }
+});
+
+export type ActivityDashboardWebhookPayload = z.infer<typeof activityDashboardWebhookPayloadSchema>;
+
 export const dealershipWebhookPayloadSchema = z.object({
   record_id: z.string().trim().min(1).max(128),
   verified: z.string().trim().max(128).optional(),

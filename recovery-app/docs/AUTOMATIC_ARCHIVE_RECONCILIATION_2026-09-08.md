@@ -56,4 +56,4 @@ When restoring this function, deploy the application before creating or editing 
 
 For an overdue backlog, run the reconciliation first, present its channel list with the Event End values, and obtain explicit user approval before archiving. The daily task is intentionally not a bulk automatic catch-up tool.
 
-Protected Slack, GoHighLevel, and schedule identifiers remain in the private recovery vault; they are not stored in this guide.
+Protected Slack, GoHighLevel, and schedule identifiers remain in the Manus Keys and Codes; they are not stored in this guide.

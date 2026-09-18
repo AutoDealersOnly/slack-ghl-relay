@@ -15,7 +15,7 @@ The existing Sent to Print Slack notice remains the first action and keeps its e
 | Dealership connection | Linked dealership subaccount connection can upload Media files and update custom values | Saves images to the correct dealership and writes the campaign values. |
 | ADO Production record | Linked to a Dealership record and campaign Slack channel | Supplies the safe server-side relationship needed to resolve the destination. |
 
-Protected connection values, Slack group references, location identifiers, and API credentials stay in the private recovery vault only.
+Protected connection values, Slack group references, location identifiers, and API credentials stay in the Manus Keys and Codes only.
 
 ## Mailpiece selection and mapping
 
@@ -46,7 +46,7 @@ On September 14, 2026, the 2609 Miracle Toyota P Sent to Print run confirmed the
 
 ## Recovery and troubleshooting
 
-1. Start from `docs/RECOVERY_INDEX.md` and the private recovery-vault document.
+1. Start from `docs/RECOVERY_INDEX.md` and the Manus Keys and Codes document.
 2. Restore the secret-free application from the company recovery branch and enter protected settings only through the secure configuration screen.
 3. Keep the existing proof-stage workflow and replace only its dead destination with `/api/relay/ghl/proof_status` under the current published relay URL.
 4. Confirm the Slack bot retains `files:read` and the ABC Dealer connection can upload Media files before testing.

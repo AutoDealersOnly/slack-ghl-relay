@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { ghlHeaders, selectExactProductionRecord } from "./ghl";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ghlHeaders, listDealershipContactIdsByTag, selectExactProductionRecord } from "./ghl";
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("GHL object request headers", () => {
   it("carries the ADO location context without changing the bearer token format", () => {
@@ -31,5 +33,19 @@ describe("GHL object request headers", () => {
         "2608-fayetteville-kia-sd"
       )
     ).toThrow("Ambiguous Production record match");
+  });
+
+  it("reads only contact references when collecting one dealership tag", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ contacts: [{ id: "contact-a" }, { id: "contact-a" }, { id: "contact-b" }] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(listDealershipContactIdsByTag({ locationId: "dealer-location", apiKey: "dealer-key", tag: "phone" }))
+      .resolves.toEqual(["contact-a", "contact-b"]);
+    const request = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    expect(request).toMatchObject({
+      locationId: "dealer-location",
+      filters: [{ field: "tags", operator: "contains", value: "phone" }],
+    });
+    expect(JSON.stringify(request)).not.toContain("dealer-key");
   });
 });

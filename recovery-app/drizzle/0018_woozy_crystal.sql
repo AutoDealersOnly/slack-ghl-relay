@@ -1,0 +1,1 @@
+ALTER TABLE `relay_campaign_activity_events` ADD `captureMethod` enum('workflow','manual_tag') DEFAULT 'workflow' NOT NULL;

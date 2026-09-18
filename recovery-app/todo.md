@@ -301,6 +301,16 @@
 
 - [x] Rebuild Production Canvas repair as an ABC Test-only control and verify it updates ABC Test’s existing visible Canvas without creating a duplicate.
 - [x] Record the successful ABC Test-only Canvas refresh and the direct-edit/no-create design in the recovery instructions and Manus Keys and Codes.
-- [ ] Keep the Production Canvas repair control limited to ABC Test until David explicitly approves a wider release after reviewing this successful test.
+- [x] Keep the Production Canvas repair control limited to ABC Test until David explicitly approves a wider release after reviewing this successful test.
+
+- [ ] Enable the tested direct-edit Production Canvas refresh for all campaign channels, while permanently refusing to create or relink a Canvas from the Super Admin control.
+- [ ] Move the dynamic pending-archive list into the private Super Admin Canvas and replace per-campaign thread messages with one permanent Manage Pending Archives launcher that lets an administrator choose one current campaign to keep open.
+- [ ] Remove the existing per-campaign Campaign archive pending cards from private #super-admin during the approved Canvas-list migration, while retaining only the safe internal action history and one permanent archive manager message.
 
 - [x] Replace the stale disabled Production Canvas repair launcher in private #super-admin with the published ABC Test-only direct-refresh control; do not create, refresh, or relink any campaign Canvas during this message-only update.
+
+- [x] Build and visually verify the separate ABC Test-only Activity Dashboard Canvas with a fifteen-minute refresh cycle, a seven-day-pre-event collection period, and no changes to the Production Canvas, dates, archives, proof relays, or OfficeAtHand settings.
+- [x] Include both workflow notices and current lower-case GoHighLevel tags in the ABC Test dashboard, so manual tag changes are collected on every refresh without exposing customer information in Slack.
+- [x] Add the QR activity, Phone, SMS, OneClick/Facebook, AI Booked Appointments, and QR Shows modules; treat `qr show` and `qr check in` as one show total, and remove `qr visit` when `qr appointment` is applied.
+- [x] Allow `/ghl` to refresh the separate Activity Dashboard only for ABC Test after the Production Canvas is updated; it must not create another Activity Dashboard Canvas after the first saved tab exists.
+- [ ] After the ABC Test dashboard proves automatic tag collection, document its operational workflow in Manus Keys and Codes and push the secret-free recovery backup before extending it beyond ABC Test.

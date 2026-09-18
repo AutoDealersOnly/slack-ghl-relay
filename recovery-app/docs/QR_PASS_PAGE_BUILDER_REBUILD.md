@@ -18,7 +18,7 @@ The builder’s outputs are intended for the following locations:
 
 The application source, status page, selector list, browser storage, and GitHub backup must never contain actual dealership API keys, location IDs, or the QR Pass Builder private access value. The final generated Block 3 and Block 4 may include the selected dealership’s API key because they are the intentional copy-ready output for that dealership page.
 
-The exact custom-menu URL, including its private access value, is stored only in the private recovery-vault Google document under **QR PASS PAGE BUILDER — ACTIVE RECOVERY RECORD**. Do not paste that full URL into GitHub, shared documents, or chat.
+The exact custom-menu URL, including its private access value, is stored only in the Manus Keys and Codes under **QR PASS PAGE BUILDER — Manus Keys and Codes**. Do not paste that full URL into GitHub, shared documents, or chat.
 
 ## How to make a future page adjustment
 
@@ -30,7 +30,7 @@ Begin with the ADO GHL–Slack Relay Recovery Index and the company GitHub backu
 | App route | `client/src/App.tsx` |
 | Server-side dealership search and output generation | `server/relay/qr-pass-builder.ts` |
 | Access check | `server/relay/qr-pass-access.ts` |
-| Protected no-login value | `QR_PASS_BUILDER_ACCESS_TOKEN` in protected project settings and private vault only |
+| Protected no-login value | `QR_PASS_BUILDER_ACCESS_TOKEN` in protected project settings and Manus Keys and Codes only |
 | Unit tests | `server/relay/qr-pass-builder.test.ts`, `server/relay/qr-pass-access.test.ts` |
 | Read-only ABC generator check | `server/relay/qr-pass-builder.credentials.test.ts` |
 
@@ -40,6 +40,6 @@ After publication, open the builder from the ADO GHL custom-menu link, select AB
 
 ## How to rebuild after a loss
 
-Connect GitHub, clone [AutoDealersOnly/slack-ghl-relay](https://github.com/AutoDealersOnly/slack-ghl-relay), and check out `secure-recovery-relay-20260826`. Restore the `recovery-app` folder in a new project. Enter current protected settings from the private recovery vault, including `QR_PASS_BUILDER_ACCESS_TOKEN`. Publish the replacement, then update the existing ADO GHL custom-menu link using the newly recorded private builder URL. Test ABC Dealer before using the rebuilt page for another dealership.
+Connect GitHub, clone [AutoDealersOnly/slack-ghl-relay](https://github.com/AutoDealersOnly/slack-ghl-relay), and check out `secure-recovery-relay-20260826`. Restore the `recovery-app` folder in a new project. Enter current protected settings from the Manus Keys and Codes, including `QR_PASS_BUILDER_ACCESS_TOKEN`. Publish the replacement, then update the existing ADO GHL custom-menu link using the newly recorded private builder URL. Test ABC Dealer before using the rebuilt page for another dealership.
 
 > **Standard change rule for every restored function:** start from the Recovery Index, change only what was requested, test the affected operation, update the private record, and push the secret-free tested version to GitHub before starting another automation.

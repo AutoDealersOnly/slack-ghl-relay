@@ -6,6 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import PinCodeLookup from "./pages/PinCodeLookup";
+import ActiveCallLookupTest from "./pages/ActiveCallLookupTest";
 import QrPassBuilder from "./pages/QrPassBuilder";
 
 function Router() {
@@ -15,6 +16,7 @@ function Router() {
       <Route path={"/"} component={Home} />
       <Route path={"/qr-pass-builder"} component={QrPassBuilder} />
       <Route path={"/pin-code-lookup"} component={PinCodeLookup} />
+      <Route path={"/pin-code-lookup-active-call-test"} component={ActiveCallLookupTest} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />

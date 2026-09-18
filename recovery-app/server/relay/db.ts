@@ -1,7 +1,10 @@
-import { and, desc, eq, gte, inArray, isNotNull, lt } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, lt, ne } from "drizzle-orm";
 import {
   relayActionLogs,
+  relayActivityDashboardRefreshJobs,
+  relayActivityDashboards,
   relayArchiveReconciliationJobs,
+  relayCampaignActivityEvents,
   relayCampaigns,
   relayMailpieceImageJobs,
   relayMailpieceImageUploads,
@@ -22,9 +25,44 @@ export type CampaignUpsertInput = {
   channelId?: string | null;
   canvasId?: string | null;
   dealershipRecordId?: string | null;
+  dealershipLocationId?: string | null;
   dealershipName?: string | null;
+  eventStartDate?: string | null;
   eventEndDate?: string | null;
 };
+
+type ExistingCampaignContext = {
+  channelId?: string | null;
+  canvasId?: string | null;
+  dealershipRecordId?: string | null;
+  dealershipLocationId?: string | null;
+  dealershipName?: string | null;
+  eventStartDate?: string | null;
+  eventEndDate?: string | null;
+};
+
+const meaningfulValue = (value: string | null | undefined): string | null => {
+  const trimmed = value?.trim();
+  return trimmed || null;
+};
+
+/**
+ * A partial GoHighLevel response must never erase the campaign context that a
+ * previously successful Production Canvas update already saved. This protects
+ * Activity Dashboard dates and dealership connections on ordinary /ghl refreshes.
+ */
+export function preserveCampaignContext(input: CampaignUpsertInput, existing?: ExistingCampaignContext | null) {
+  const preserve = (incoming: string | null | undefined, saved: string | null | undefined) => meaningfulValue(incoming) ?? meaningfulValue(saved);
+  return {
+    channelId: preserve(input.channelId, existing?.channelId),
+    canvasId: preserve(input.canvasId, existing?.canvasId),
+    dealershipRecordId: preserve(input.dealershipRecordId, existing?.dealershipRecordId),
+    dealershipLocationId: preserve(input.dealershipLocationId, existing?.dealershipLocationId),
+    dealershipName: preserve(input.dealershipName, existing?.dealershipName),
+    eventStartDate: preserve(input.eventStartDate, existing?.eventStartDate),
+    eventEndDate: preserve(input.eventEndDate, existing?.eventEndDate),
+  };
+}
 
 export const OFFICE_AT_HAND_ACTIVE_CALL_CONNECTION_KEY = "active_call_lookup_test";
 export const SUPER_ADMIN_CONTROL_KEY = "super_admin";
@@ -180,26 +218,20 @@ export async function getCampaignByScheduledTask(taskUid: string, kind: "archive
 export async function upsertCampaign(input: CampaignUpsertInput) {
   const db = await getDb();
   if (!db) throw new Error("Relay database is unavailable");
+  const existing = await getCampaignByChannelName(input.channelName);
+  const context = preserveCampaignContext(input, existing);
 
   await db
     .insert(relayCampaigns)
     .values({
       productionName: input.productionName,
       channelName: input.channelName,
-      channelId: input.channelId ?? null,
-      canvasId: input.canvasId ?? null,
-      dealershipRecordId: input.dealershipRecordId ?? null,
-      dealershipName: input.dealershipName ?? null,
-      eventEndDate: input.eventEndDate ?? null,
+      ...context,
     })
     .onDuplicateKeyUpdate({
       set: {
         productionName: input.productionName,
-        channelId: input.channelId ?? null,
-        canvasId: input.canvasId ?? null,
-        dealershipRecordId: input.dealershipRecordId ?? null,
-        dealershipName: input.dealershipName ?? null,
-        eventEndDate: input.eventEndDate ?? null,
+        ...context,
       },
     });
 
@@ -220,6 +252,168 @@ export async function updateCampaignArchive(
   const db = await getDb();
   if (!db) throw new Error("Relay database is unavailable");
   await db.update(relayCampaigns).set(patch).where(eq(relayCampaigns.id, campaignId));
+}
+
+export type ActivityDashboardStatus = "not_created" | "creating" | "ready" | "failed";
+export type ActivityDashboardSource = "qr_visit" | "qr_appointment" | "phone_appointment" | "sms_appointment" | "oneclick_appointment" | "ai_booked_appointment" | "qr_show";
+export type ActivityDashboardCaptureMethod = "workflow" | "manual_tag";
+
+/** Ensures a campaign has one separate Activity Dashboard record, without touching its Production Canvas. */
+export async function registerActivityDashboard(campaignId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  await db.insert(relayActivityDashboards).values({ campaignId }).onDuplicateKeyUpdate({ set: { campaignId } });
+  const rows = await db.select().from(relayActivityDashboards).where(eq(relayActivityDashboards.campaignId, campaignId)).limit(1);
+  if (!rows[0]) throw new Error("Activity Dashboard record was not found after registration");
+  return rows[0];
+}
+
+export async function getActivityDashboard(campaignId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(relayActivityDashboards).where(eq(relayActivityDashboards.campaignId, campaignId)).limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * Resolves an incoming location-scoped activity notice only when exactly one
+ * open campaign has a ready, separate Activity Dashboard. Ambiguity is refused
+ * rather than allowing activity from one dealership campaign to count on another.
+ */
+export async function findOpenActivityDashboardCampaignByLocation(dealershipLocationId: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select({
+    id: relayCampaigns.id,
+    productionName: relayCampaigns.productionName,
+    channelName: relayCampaigns.channelName,
+    channelId: relayCampaigns.channelId,
+    eventStartDate: relayCampaigns.eventStartDate,
+    archiveStatus: relayCampaigns.archiveStatus,
+  }).from(relayCampaigns)
+    .innerJoin(relayActivityDashboards, eq(relayCampaigns.id, relayActivityDashboards.campaignId))
+    .where(and(
+      eq(relayCampaigns.dealershipLocationId, dealershipLocationId),
+      eq(relayActivityDashboards.canvasStatus, "ready"),
+      ne(relayCampaigns.archiveStatus, "archived")
+    ));
+  return rows.length === 1 ? rows[0] : null;
+}
+
+/** Claims a missing or failed separate Canvas before it is created, preventing duplicate tabs on webhook retries. */
+export async function claimActivityDashboardCanvasCreation(campaignId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  const result = await db.update(relayActivityDashboards)
+    .set({ canvasStatus: "creating", lastError: null })
+    .where(and(
+      eq(relayActivityDashboards.campaignId, campaignId),
+      inArray(relayActivityDashboards.canvasStatus, ["not_created", "failed"])
+    ));
+  return getDatabaseAffectedRows(result) === 1;
+}
+
+/** Saves a Canvas creation or direct edit result. A null Canvas ID never replaces a saved Canvas ID. */
+export async function completeActivityDashboardCanvasCreation(input: {
+  campaignId: number;
+  canvasId: string | null;
+  refreshedAt?: Date;
+  failureDetail?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  await db.update(relayActivityDashboards).set({
+    ...(input.canvasId ? { canvasId: input.canvasId, canvasStatus: "ready" as const, lastRefreshedAt: input.refreshedAt ?? new Date(), lastError: null } : { canvasStatus: "failed" as const, lastError: input.failureDetail?.slice(0, 500) ?? "Activity Dashboard Canvas was not created." }),
+  }).where(eq(relayActivityDashboards.campaignId, input.campaignId));
+}
+
+/** Lists saved Activity Dashboard Canvases only. The caller applies its campaign-window and ABC-only safeguards. */
+export async function listActivityDashboardRefreshCandidates() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    campaignId: relayCampaigns.id,
+    productionName: relayCampaigns.productionName,
+    channelName: relayCampaigns.channelName,
+    channelId: relayCampaigns.channelId,
+    dealershipRecordId: relayCampaigns.dealershipRecordId,
+    dealershipLocationId: relayCampaigns.dealershipLocationId,
+    eventStartDate: relayCampaigns.eventStartDate,
+    eventEndDate: relayCampaigns.eventEndDate,
+    archiveStatus: relayCampaigns.archiveStatus,
+    canvasId: relayActivityDashboards.canvasId,
+  }).from(relayActivityDashboards)
+    .innerJoin(relayCampaigns, eq(relayActivityDashboards.campaignId, relayCampaigns.id))
+    .where(eq(relayActivityDashboards.canvasStatus, "ready"));
+}
+
+/** Reads only protected contact fingerprints and source values for in-window dashboard totals. */
+export async function getCampaignActivityMetrics(campaignId: number, collectedOnOrAfter: Date) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    source: relayCampaignActivityEvents.source,
+    captureMethod: relayCampaignActivityEvents.captureMethod,
+    contactFingerprint: relayCampaignActivityEvents.contactFingerprint,
+  })
+    .from(relayCampaignActivityEvents)
+    .where(and(eq(relayCampaignActivityEvents.campaignId, campaignId), gte(relayCampaignActivityEvents.occurredAt, collectedOnOrAfter)));
+}
+
+/** Inserts one immutable source activity only once, even if GoHighLevel retries a webhook action. */
+export async function recordCampaignActivityEvent(input: {
+  campaignId: number;
+  source: ActivityDashboardSource;
+  captureMethod?: ActivityDashboardCaptureMethod;
+  contactFingerprint: string;
+  eventFingerprint: string;
+  occurredAt: Date;
+}): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  try {
+    await db.insert(relayCampaignActivityEvents).values({ ...input, captureMethod: input.captureMethod ?? "workflow" });
+    return true;
+  } catch (error) {
+    if (isDuplicateDatabaseEntryError(error)) return false;
+    throw error;
+  }
+}
+
+export const ACTIVITY_DASHBOARD_REFRESH_JOB_KEY = "activity_dashboard_refresh";
+
+export async function getActivityDashboardRefreshJob() {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(relayActivityDashboardRefreshJobs)
+    .where(eq(relayActivityDashboardRefreshJobs.jobKey, ACTIVITY_DASHBOARD_REFRESH_JOB_KEY)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function saveActivityDashboardRefreshJob(input: { taskUid: string; cronExpression: string; isEnabled?: boolean }) {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  await db.insert(relayActivityDashboardRefreshJobs).values({
+    jobKey: ACTIVITY_DASHBOARD_REFRESH_JOB_KEY,
+    taskUid: input.taskUid,
+    cronExpression: input.cronExpression,
+    isEnabled: input.isEnabled ?? true,
+  }).onDuplicateKeyUpdate({ set: { taskUid: input.taskUid, cronExpression: input.cronExpression, isEnabled: input.isEnabled ?? true } });
+}
+
+export async function getActivityDashboardRefreshJobByTaskUid(taskUid: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(relayActivityDashboardRefreshJobs)
+    .where(eq(relayActivityDashboardRefreshJobs.taskUid, taskUid)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function recordActivityDashboardRefreshRun(taskUid: string, summary: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  await db.update(relayActivityDashboardRefreshJobs).set({ lastRunAt: new Date(), lastSummary: summary.slice(0, 4000) })
+    .where(eq(relayActivityDashboardRefreshJobs.taskUid, taskUid));
 }
 
 /** Returns the one active private Super Admin channel, if setup has completed. */
@@ -256,11 +450,18 @@ export async function updateSuperAdminCanvasId(canvasId: string | null) {
   await db.update(relaySuperAdminChannels).set({ canvasId }).where(eq(relaySuperAdminChannels.controlKey, SUPER_ADMIN_CONTROL_KEY));
 }
 
-/** Saves the one bot-authored Canvas repair launcher timestamp for the active private Super Admin channel. */
+/** Saves the one bot-authored Production Canvas refresh launcher timestamp for the active private Super Admin channel. */
 export async function updateSuperAdminCanvasRepairMessageTs(canvasRepairMessageTs: string | null) {
   const db = await getDb();
   if (!db) throw new Error("Relay database is unavailable");
   await db.update(relaySuperAdminChannels).set({ canvasRepairMessageTs }).where(eq(relaySuperAdminChannels.controlKey, SUPER_ADMIN_CONTROL_KEY));
+}
+
+/** Saves the one permanent Manage Pending Archives launcher timestamp for the active Super Admin channel. */
+export async function updateSuperAdminArchiveManagerMessageTs(archiveManagerMessageTs: string | null) {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  await db.update(relaySuperAdminChannels).set({ archiveManagerMessageTs }).where(eq(relaySuperAdminChannels.controlKey, SUPER_ADMIN_CONTROL_KEY));
 }
 
 /** Lists only campaigns that still have an individual pending archive job. */
@@ -305,6 +506,16 @@ export async function getSuperAdminArchiveControl(campaignId: number) {
     .where(eq(relaySuperAdminArchiveControls.campaignId, campaignId))
     .limit(1);
   return rows[0] ?? null;
+}
+
+/** Lists the old per-campaign card records only so the Canvas-list migration can remove their bot messages once. */
+export async function listSuperAdminArchiveControls(superAdminChannelId: string) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(relaySuperAdminArchiveControls)
+    .where(eq(relaySuperAdminArchiveControls.superAdminChannelId, superAdminChannelId));
 }
 
 /** Upserts the one bot-authored Keep Open control tied to a campaign archive registration. */

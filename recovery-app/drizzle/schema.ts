@@ -34,7 +34,9 @@ export const relayCampaigns = mysqlTable(
     channelId: varchar("channelId", { length: 32 }),
     canvasId: varchar("canvasId", { length: 32 }),
     dealershipRecordId: varchar("dealershipRecordId", { length: 128 }),
+    dealershipLocationId: varchar("dealershipLocationId", { length: 128 }),
     dealershipName: varchar("dealershipName", { length: 255 }),
+    eventStartDate: varchar("eventStartDate", { length: 32 }),
     eventEndDate: varchar("eventEndDate", { length: 32 }),
     archiveAfter: timestamp("archiveAfter"),
     archiveTaskUid: varchar("archiveTaskUid", { length: 65 }),
@@ -49,6 +51,65 @@ export const relayCampaigns = mysqlTable(
     channelNameUnique: uniqueIndex("relay_campaigns_channel_name_unique").on(table.channelName),
     archiveTaskUidIndex: index("relay_campaigns_archive_task_uid_idx").on(table.archiveTaskUid),
     warningTaskUidIndex: index("relay_campaigns_warning_task_uid_idx").on(table.warningTaskUid),
+  })
+);
+
+/** One separate, saved Activity Dashboard Canvas per campaign. This never replaces the Production Canvas. */
+export const relayActivityDashboards = mysqlTable(
+  "relay_activity_dashboards",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    campaignId: int("campaignId").notNull(),
+    canvasId: varchar("canvasId", { length: 32 }),
+    canvasStatus: mysqlEnum("canvasStatus", ["not_created", "creating", "ready", "failed"]).default("not_created").notNull(),
+    lastRefreshedAt: timestamp("lastRefreshedAt"),
+    lastError: varchar("lastError", { length: 500 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    campaignUnique: uniqueIndex("relay_activity_dashboards_campaign_unique").on(table.campaignId),
+    refreshIndex: index("relay_activity_dashboards_refresh_idx").on(table.canvasStatus, table.lastRefreshedAt),
+  })
+);
+
+/** An append-only, de-duplicated source record for the separate Activity Dashboard. No contact data is stored. */
+export const relayCampaignActivityEvents = mysqlTable(
+  "relay_campaign_activity_events",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    campaignId: int("campaignId").notNull(),
+    source: mysqlEnum("source", ["qr_visit", "qr_appointment", "phone_appointment", "sms_appointment", "oneclick_appointment", "ai_booked_appointment", "qr_show"]).notNull(),
+    captureMethod: mysqlEnum("captureMethod", ["workflow", "manual_tag"]).default("workflow").notNull(),
+    contactFingerprint: varchar("contactFingerprint", { length: 64 }).notNull(),
+    eventFingerprint: varchar("eventFingerprint", { length: 64 }).notNull(),
+    occurredAt: timestamp("occurredAt").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    eventFingerprintUnique: uniqueIndex("relay_campaign_activity_events_fingerprint_unique").on(table.eventFingerprint),
+    campaignOccurredIndex: index("relay_campaign_activity_events_campaign_occurred_idx").on(table.campaignId, table.occurredAt),
+    campaignSourceIndex: index("relay_campaign_activity_events_campaign_source_idx").on(table.campaignId, table.source),
+  })
+);
+
+/** The one project-level fifteen-minute Activity Dashboard refresh registration. */
+export const relayActivityDashboardRefreshJobs = mysqlTable(
+  "relay_activity_dashboard_refresh_jobs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    jobKey: varchar("jobKey", { length: 96 }).notNull(),
+    taskUid: varchar("taskUid", { length: 65 }).notNull(),
+    cronExpression: varchar("cronExpression", { length: 64 }).notNull(),
+    isEnabled: boolean("isEnabled").default(true).notNull(),
+    lastRunAt: timestamp("lastRunAt"),
+    lastSummary: text("lastSummary"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    jobKeyUnique: uniqueIndex("relay_activity_dashboard_refresh_jobs_key_unique").on(table.jobKey),
+    taskUidIndex: index("relay_activity_dashboard_refresh_jobs_task_uid_idx").on(table.taskUid),
   })
 );
 
@@ -134,6 +195,7 @@ export const relaySuperAdminChannels = mysqlTable(
     channelName: varchar("channelName", { length: 128 }).notNull(),
     canvasId: varchar("canvasId", { length: 32 }),
     canvasRepairMessageTs: varchar("canvasRepairMessageTs", { length: 32 }),
+    archiveManagerMessageTs: varchar("archiveManagerMessageTs", { length: 32 }),
     isActive: boolean("isActive").default(true).notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -144,7 +206,7 @@ export const relaySuperAdminChannels = mysqlTable(
   })
 );
 
-/** One bot-authored Keep Open control per campaign archive registration. */
+/** One durable Keep Open state record per campaign archive registration. */
 export const relaySuperAdminArchiveControls = mysqlTable(
   "relay_super_admin_archive_controls",
   {

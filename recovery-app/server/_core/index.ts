@@ -16,6 +16,7 @@ import { qrPassAccessRouter } from "../relay/qr-pass-access";
 import { pinCodeLookupAccessRouter } from "../relay/pin-code-lookup-access";
 import { officeAtHandOAuthRouter } from "../relay/office-at-hand-oauth";
 import { officeAtHandEventsRouter } from "../relay/office-at-hand-events";
+import { activityDashboardRouter } from "../relay/activity-dashboard-routes";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -68,6 +69,7 @@ async function startServer() {
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   app.use("/api/relay", relayRouter);
+  app.use("/api/activity-dashboard", activityDashboardRouter);
   app.use("/api/qr-pass", qrPassAccessRouter);
   app.use("/api/pin-code-lookup", pinCodeLookupAccessRouter);
   app.use("/api/office-at-hand", officeAtHandOAuthRouter);

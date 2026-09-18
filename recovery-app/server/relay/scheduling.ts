@@ -157,6 +157,8 @@ export async function cancelCampaignArchive(channelName: string): Promise<void> 
   const campaign = await getCampaignByChannelName(channelName);
   if (!campaign) return;
   await cancelScheduledCampaignArchive(campaign);
+  const { syncSuperAdminArchiveDashboard } = await import("./super-admin");
+  await syncSuperAdminArchiveDashboard();
 }
 
 export async function rescheduleCampaignArchive(channelName: string): Promise<void> {

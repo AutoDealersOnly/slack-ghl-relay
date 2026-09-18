@@ -8,6 +8,7 @@ import { normalizeCampaignChannelName } from "./naming";
 import { scheduleCampaignArchive } from "./scheduling";
 import { createOrUpdateProductionCanvas, joinSlackChannel } from "./slack";
 import { isAuthorizedSlackRequest, redactErrorDetail } from "./security";
+import { ensureActivityDashboardRefreshSchedule, ensureCampaignActivityDashboard } from "./activity-dashboard";
 
 type SlackCommandRequest = Request & { rawBody?: string };
 type SlackCommandBody = { channel_id?: string; channel_name?: string; user_id?: string };
@@ -66,12 +67,18 @@ slackCommandRouter.post("/ghl", async (req: SlackCommandRequest, res: Response) 
         channelId,
         canvasId,
         dealershipRecordId: dealership?.id ?? null,
+        dealershipLocationId: dealership?.properties.loc_id ?? null,
         dealershipName: dealership?.properties.dealership_name ?? null,
+        eventStartDate: production?.properties.event_start ?? null,
         eventEndDate: production?.properties.event_end ?? null,
       });
       if (campaign.eventEndDate && campaign.archiveStatus !== "scheduled") {
         await scheduleCampaignArchive(channelName);
       }
+      // This creates only the separate, ABC Test-only Activity Dashboard Canvas.
+      // It cannot edit or replace the Production Canvas created above.
+      const activityDashboardResult = await ensureCampaignActivityDashboard(campaign);
+      if (activityDashboardResult !== "failed") await ensureActivityDashboardRefreshSchedule();
       await logRelayAction({ campaignId: campaign.id, action: "slack_ghl_channel_link", outcome: "success", detail: production ? "Slack /ghl refreshed the Production Canvas." : "Slack /ghl created the original no-record-found Production Canvas fallback." });
     } catch (error) {
       const detail = redactErrorDetail(error);

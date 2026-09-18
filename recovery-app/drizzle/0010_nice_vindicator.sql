@@ -1,0 +1,1 @@
+ALTER TABLE `relay_office_at_hand_test_subscriptions` ADD `dealershipRecordId` varchar(128) NOT NULL;

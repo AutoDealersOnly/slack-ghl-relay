@@ -1,4 +1,5 @@
 import { buildProductionCanvas } from "./canvas";
+import { ensureCampaignActivityDashboard } from "./activity-dashboard";
 import { getRelayConfig } from "./config";
 import {
   campaignCustomValues,
@@ -75,9 +76,12 @@ export async function ensureCampaignChannelAndCanvas(payload: ProductionWebhookP
     channelId: channel.id,
     canvasId,
     dealershipRecordId: context.dealership?.id ?? null,
+    dealershipLocationId: dealership.loc_id ?? null,
     dealershipName: dealership.dealership_name ?? null,
+    eventStartDate: context.production.properties.event_start ?? null,
     eventEndDate: context.production.properties.event_end ?? null,
   });
+  await ensureCampaignActivityDashboard(campaign);
 
   if (existing && shouldReconcileArchiveSchedule(existing.eventEndDate, campaign.eventEndDate, existing.archiveStatus, existing.archiveAfter)) {
     await rescheduleCampaignArchive(campaign.channelName);
@@ -105,9 +109,12 @@ export async function refreshProductionCanvas(payload: ProductionWebhookPayload)
     channelId: campaign.channelId,
     canvasId,
     dealershipRecordId: context.dealership?.id ?? null,
+    dealershipLocationId: context.dealership?.properties.loc_id ?? null,
     dealershipName: context.dealership?.properties.dealership_name ?? null,
+    eventStartDate: context.production.properties.event_start ?? null,
     eventEndDate: context.production.properties.event_end ?? null,
   });
+  await ensureCampaignActivityDashboard(updated);
   if (shouldRescheduleArchive(campaign.eventEndDate, updated.eventEndDate, campaign.archiveStatus)) {
     await rescheduleCampaignArchive(updated.channelName);
   }
