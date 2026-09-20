@@ -5,6 +5,7 @@ import {
   claimMailpieceImageJobForScheduling,
   failMailpieceImageJobScheduling,
   getCampaignByChannelName,
+  isCampaignAutoarchiveEnabled,
   logRelayAction,
   updateCampaignArchive,
 } from "./db";
@@ -108,9 +109,22 @@ export const shouldReconcileArchiveSchedule = (
   return new Date(archiveAfter).getTime() !== expectedArchiveDate.getTime();
 };
 
+/** A false project-wide switch is an absolute stop for archive work. */
+export const isCampaignAutoarchivePaused = (autoarchiveEnabled: boolean): boolean => !autoarchiveEnabled;
+
 export async function scheduleCampaignArchive(channelName: string): Promise<void> {
   const campaign = await getCampaignByChannelName(channelName);
   if (!campaign?.eventEndDate || !campaign.channelId) return;
+
+  if (isCampaignAutoarchivePaused(await isCampaignAutoarchiveEnabled())) {
+    await logRelayAction({
+      campaignId: campaign.id,
+      action: "campaign_archive_schedule",
+      outcome: "skipped",
+      detail: "Autoarchive is paused by the administrator; no archive or warning job was created.",
+    });
+    return;
+  }
 
   await Promise.all([
     campaign.archiveTaskUid ? deleteHeartbeatJob(campaign.archiveTaskUid, "") : Promise.resolve(),

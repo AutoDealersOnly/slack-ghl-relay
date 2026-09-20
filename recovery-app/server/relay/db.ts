@@ -646,6 +646,22 @@ export async function getRelayStatusData() {
 
 export const ARCHIVE_RECONCILIATION_JOB_KEY = "daily_archive_reconciliation";
 
+/**
+ * The daily reconciliation registration is the durable, project-wide archive
+ * switch. If it is paused, no new campaign archive or warning job may be
+ * created, and scheduled callbacks must leave any surviving job untouched.
+ */
+export async function isCampaignAutoarchiveEnabled(): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .select({ isEnabled: relayArchiveReconciliationJobs.isEnabled })
+    .from(relayArchiveReconciliationJobs)
+    .where(eq(relayArchiveReconciliationJobs.jobKey, ARCHIVE_RECONCILIATION_JOB_KEY))
+    .limit(1);
+  return rows[0]?.isEnabled === true;
+}
+
 export async function getArchiveReconciliationJobByTaskUid(taskUid: string) {
   const db = await getDb();
   if (!db) return null;

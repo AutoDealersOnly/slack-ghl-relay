@@ -57,3 +57,9 @@ When restoring this function, deploy the application before creating or editing 
 For an overdue backlog, run the reconciliation first, present its channel list with the Event End values, and obtain explicit user approval before archiving. The daily task is intentionally not a bulk automatic catch-up tool.
 
 Protected Slack, GoHighLevel, and schedule identifiers remain in the Manus Keys and Codes; they are not stored in this guide.
+
+## Emergency global pause — September 20, 2026
+
+At David’s direction, every pending campaign archive and warning job was removed and the daily reconciliation job was paused. This stops all automatic Slack archive and warning activity while the schedule behavior is reviewed. The relay now treats that paused daily job as a global safety switch: it will not create a new archive or warning job while paused, and a surviving scheduled callback will safely exit without archiving or warning a channel.
+
+The immediate investigation found a next-event Sun Toyota record whose Event Start date is in October while its Event End date is in September. The relay had therefore calculated an archive for the following day. The Production record’s dates were not edited during the emergency stop. Do not resume automatic archiving until the date inconsistency and the requested weekend-pausing rule have been reviewed and tested in ABC Test.

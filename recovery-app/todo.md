@@ -1,5 +1,7 @@
 # Project TODO
 
+- [x] Emergency-stop all automatic Slack archiving at David’s direction: remove every pending campaign archive and warning job, pause the daily re-creation job, and add a fail-closed guard that blocks new schedules and surviving callbacks until an administrator deliberately resumes the function. Review the September 20 Sun Toyota date inconsistency and weekend-pause design before reactivation.
+
 - [x] Document the approved GHL-to-Slack relay architecture, protected settings, required Slack permissions, GoHighLevel workflow payloads, and recovery boundaries.
 - [x] Add protected server-side settings for the ADO GHL API key, ADO location ID, Slack bot token, Slack signing secret, GHL webhook shared secret, notification channel, invitee user-group, named invitees, and optional external forwarding endpoint.
 - [x] Collect protected settings in small, independently submittable groups so the relay can be configured and tested without waiting for every optional Slack value.

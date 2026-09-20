@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildExactDateCron, calculateArchiveDate, shouldReconcileArchiveSchedule, shouldRescheduleArchive } from "./scheduling";
+import { buildExactDateCron, calculateArchiveDate, isCampaignAutoarchivePaused, shouldReconcileArchiveSchedule, shouldRescheduleArchive } from "./scheduling";
 
 describe("relay archive timing", () => {
   it("schedules an archive three days after a valid campaign end date", () => {
@@ -27,5 +27,10 @@ describe("relay archive timing", () => {
     expect(shouldReconcileArchiveSchedule("2026-09-13", "2026-09-13", "scheduled", "2026-09-15T12:00:00.000Z")).toBe(true);
     expect(shouldReconcileArchiveSchedule("2026-09-13", "2026-09-13", "scheduled", "2026-09-16T12:00:00.000Z")).toBe(false);
     expect(shouldReconcileArchiveSchedule("2026-09-13", null, "scheduled", "2026-09-16T12:00:00.000Z")).toBe(true);
+  });
+
+  it("treats the administrator switch as an absolute stop for new archive work", () => {
+    expect(isCampaignAutoarchivePaused(false)).toBe(true);
+    expect(isCampaignAutoarchivePaused(true)).toBe(false);
   });
 });

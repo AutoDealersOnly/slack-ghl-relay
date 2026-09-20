@@ -10,6 +10,7 @@ import {
   getArchiveReconciliationJobByTaskUid,
   getActivityDashboardRefreshJobByTaskUid,
   getCampaignByScheduledTask,
+  isCampaignAutoarchiveEnabled,
   getMailpieceImageJobByTaskUid,
   logRelayAction,
   recordArchiveReconciliationRun,
@@ -46,6 +47,10 @@ scheduledRelayRouter.post("/archive", async (req: Request, res: Response) => {
   try {
     const user = await authenticateCron(req, res);
     if (!user) return;
+    if (!(await isCampaignAutoarchiveEnabled())) {
+      res.json({ ok: true, skipped: "autoarchive_paused" });
+      return;
+    }
     const campaign = await getCampaignByScheduledTask(user.taskUid!, "archive");
     if (!campaign || campaign.archiveStatus === "archived" || campaign.archiveStatus === "cancelled") {
       res.json({ ok: true, skipped: "orphan_or_completed" });
@@ -73,6 +78,10 @@ scheduledRelayRouter.post("/archive-warning", async (req: Request, res: Response
   try {
     const user = await authenticateCron(req, res);
     if (!user) return;
+    if (!(await isCampaignAutoarchiveEnabled())) {
+      res.json({ ok: true, skipped: "autoarchive_paused" });
+      return;
+    }
     const campaign = await getCampaignByScheduledTask(user.taskUid!, "warning");
     if (!campaign || campaign.archiveStatus !== "scheduled" || !campaign.channelId) {
       res.json({ ok: true, skipped: "orphan_or_completed" });
