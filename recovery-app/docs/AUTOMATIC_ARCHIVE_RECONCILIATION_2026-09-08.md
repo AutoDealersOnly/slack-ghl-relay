@@ -63,3 +63,9 @@ Protected Slack, GoHighLevel, and schedule identifiers remain in the Manus Keys 
 At David’s direction, every pending campaign archive and warning job was removed and the daily reconciliation job was paused. This stops all automatic Slack archive and warning activity while the schedule behavior is reviewed. The relay now treats that paused daily job as a global safety switch: it will not create a new archive or warning job while paused, and a surviving scheduled callback will safely exit without archiving or warning a channel.
 
 The immediate investigation found a next-event Sun Toyota record whose Event Start date is in October while its Event End date is in September. The relay had therefore calculated an archive for the following day. The Production record’s dates were not edited during the emergency stop. Do not resume automatic archiving until the date inconsistency and the requested weekend-pausing rule have been reviewed and tested in ABC Test.
+
+## Normal operation restored — September 21, 2026
+
+David corrected the Sun Toyota Event End date and confirmed that the prior archive rule should resume without a new weekend or date rule. The daily reconciliation registration was re-enabled. A one-time normal reconciliation then inspected 23 current active channels, restored 15 future archive schedules, recorded one overdue channel for separate approval, skipped seven safe cases, and archived no channel. The two Sun Toyota Production records were read-only checked: the September campaign retains its September dates, and the October campaign now has matching October dates.
+
+The ABC Test command verification created an archive entry only because its historical Event End date is already past. That ABC-only entry was immediately cancelled; no live campaign schedule was changed by the verification. The normal daily reconciliation continues to skip overdue campaigns for approval rather than archiving them automatically.

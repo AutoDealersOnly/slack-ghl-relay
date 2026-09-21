@@ -28,6 +28,7 @@ import { refreshOpenActivityDashboards } from "./activity-dashboard";
 
 const scheduledRelayRouter = Router();
 export const ARCHIVE_WARNING_MESSAGE = "This channel is scheduled to archive tomorrow. Contact admin if the campaign needs to remain open.";
+export const buildRelayKeepaliveResponse = () => ({ ok: true, service: "relay" });
 
 export function isAuthenticatedCronTask(user: { isCron?: boolean; taskUid?: string | null }): user is { isCron: true; taskUid: string } {
   return user.isCron === true && typeof user.taskUid === "string" && user.taskUid.length > 0;
@@ -41,6 +42,17 @@ async function authenticateCron(req: Request, res: Response) {
   }
   return user;
 }
+
+/**
+ * A lightweight, authenticated availability check. It keeps the relay ready
+ * for Slack's short slash-command response window and performs no business
+ * action or third-party API call.
+ */
+scheduledRelayRouter.post("/keepalive", async (req: Request, res: Response) => {
+  const user = await authenticateCron(req, res);
+  if (!user) return;
+  res.status(200).json(buildRelayKeepaliveResponse());
+});
 
 scheduledRelayRouter.post("/archive", async (req: Request, res: Response) => {
   let campaignId: number | null = null;
