@@ -1,11 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { buildExactDateCron, calculateArchiveDate, isCampaignAutoarchivePaused, shouldReconcileArchiveSchedule, shouldRescheduleArchive } from "./scheduling";
+import {
+  buildExactDateCron,
+  calculateArchiveDate,
+  calculateArchiveWarningDate,
+  isCampaignAutoarchivePaused,
+  isEasternWeekend,
+  moveToNextEasternBusinessDay,
+  shouldReconcileArchiveSchedule,
+  shouldRescheduleArchive,
+} from "./scheduling";
 
 describe("relay archive timing", () => {
   it("schedules an archive three days after a valid campaign end date", () => {
     const archiveDate = calculateArchiveDate("2026-08-30");
     expect(archiveDate?.toISOString()).toBe("2026-09-02T12:00:00.000Z");
     expect(buildExactDateCron(archiveDate!)).toBe("0 0 12 2 9 *");
+  });
+
+  it("moves a Saturday or Sunday archive to Monday in Eastern time", () => {
+    expect(calculateArchiveDate("2026-09-09")?.toISOString()).toBe("2026-09-14T12:00:00.000Z");
+    expect(calculateArchiveDate("2026-09-10")?.toISOString()).toBe("2026-09-14T12:00:00.000Z");
+    expect(moveToNextEasternBusinessDay(new Date("2026-09-12T12:00:00.000Z")).toISOString()).toBe("2026-09-14T12:00:00.000Z");
+    expect(isEasternWeekend(new Date("2026-09-12T12:00:00.000Z"))).toBe(true);
+    expect(isEasternWeekend(new Date("2026-09-14T12:00:00.000Z"))).toBe(false);
+  });
+
+  it("moves a Monday archive warning to the preceding Friday", () => {
+    const mondayArchive = new Date("2026-09-14T12:00:00.000Z");
+    expect(calculateArchiveWarningDate(mondayArchive).toISOString()).toBe("2026-09-11T12:00:00.000Z");
   });
 
   it("refuses a malformed campaign end date", () => {

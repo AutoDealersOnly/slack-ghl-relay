@@ -1,4 +1,4 @@
-import { createHeartbeatJob, deleteHeartbeatJob } from "../_core/heartbeat";
+import { createHeartbeatJob, deleteHeartbeatJob, updateHeartbeatJob } from "../_core/heartbeat";
 import { cancelScheduledCampaignArchive } from "./archive-jobs";
 import {
   attachMailpieceImageJobTask,
@@ -6,16 +6,43 @@ import {
   failMailpieceImageJobScheduling,
   getCampaignByChannelName,
   isCampaignAutoarchiveEnabled,
+  listPendingCampaignArchives,
   logRelayAction,
   updateCampaignArchive,
 } from "./db";
 import { redactErrorDetail } from "./security";
 
+const ARCHIVE_TIME_ZONE = "America/New_York";
+
+const easternWeekday = (date: Date): string =>
+  new Intl.DateTimeFormat("en-US", { timeZone: ARCHIVE_TIME_ZONE, weekday: "short" }).format(date);
+
+export const isEasternWeekend = (date = new Date()): boolean => {
+  const weekday = easternWeekday(date);
+  return weekday === "Sat" || weekday === "Sun";
+};
+
+const isEasternMonday = (date: Date): boolean => easternWeekday(date) === "Mon";
+
+/** Moves a planned timestamp forward only when its Eastern calendar day is Saturday or Sunday. */
+export const moveToNextEasternBusinessDay = (date: Date): Date => {
+  const next = new Date(date);
+  while (isEasternWeekend(next)) next.setUTCDate(next.getUTCDate() + 1);
+  return next;
+};
+
 export const calculateArchiveDate = (eventEndDate: string): Date | null => {
   const [year, month, day] = eventEndDate.split("-").map(Number);
   if (!year || !month || !day) return null;
   const candidate = new Date(Date.UTC(year, month - 1, day + 3, 12, 0, 0));
-  return Number.isNaN(candidate.getTime()) ? null : candidate;
+  return Number.isNaN(candidate.getTime()) ? null : moveToNextEasternBusinessDay(candidate);
+};
+
+/** A Monday archive receives its warning on Friday, so no warning is sent on a weekend. */
+export const calculateArchiveWarningDate = (archiveAfter: Date): Date => {
+  const warningDate = new Date(archiveAfter);
+  warningDate.setUTCDate(warningDate.getUTCDate() - (isEasternMonday(archiveAfter) ? 3 : 1));
+  return warningDate;
 };
 
 export const buildExactDateCron = (date: Date): string =>
@@ -112,6 +139,12 @@ export const shouldReconcileArchiveSchedule = (
 /** A false project-wide switch is an absolute stop for archive work. */
 export const isCampaignAutoarchivePaused = (autoarchiveEnabled: boolean): boolean => !autoarchiveEnabled;
 
+const buildArchiveJobDescription = (channelName: string): string =>
+  `Archive #${channelName} three calendar days after the campaign end date, moved to Monday when needed to avoid weekend archive activity.`;
+
+const buildArchiveWarningJobDescription = (channelName: string): string =>
+  `Warn #${channelName} before its scheduled archive, moved to Friday when the archive will occur Monday.`;
+
 export async function scheduleCampaignArchive(channelName: string): Promise<void> {
   const campaign = await getCampaignByChannelName(channelName);
   if (!campaign?.eventEndDate || !campaign.channelId) return;
@@ -133,8 +166,7 @@ export async function scheduleCampaignArchive(channelName: string): Promise<void
 
   const archiveAfter = calculateArchiveDate(campaign.eventEndDate);
   if (!archiveAfter) throw new Error("Campaign end date is not a valid YYYY-MM-DD value");
-  const warningDate = new Date(archiveAfter);
-  warningDate.setUTCDate(warningDate.getUTCDate() - 1);
+  const warningDate = calculateArchiveWarningDate(archiveAfter);
 
   const archiveJob = await createHeartbeatJob(
     {
@@ -142,7 +174,7 @@ export async function scheduleCampaignArchive(channelName: string): Promise<void
       cron: buildExactDateCron(archiveAfter),
       path: "/api/scheduled/relay/archive",
       method: "POST",
-      description: `Archive #${campaign.channelName} three days after the campaign end date.`,
+      description: buildArchiveJobDescription(campaign.channelName),
     },
     ""
   );
@@ -152,7 +184,7 @@ export async function scheduleCampaignArchive(channelName: string): Promise<void
       cron: buildExactDateCron(warningDate),
       path: "/api/scheduled/relay/archive-warning",
       method: "POST",
-      description: `Warn #${campaign.channelName} one day before its scheduled archive.`,
+      description: buildArchiveWarningJobDescription(campaign.channelName),
     },
     ""
   );
@@ -178,4 +210,62 @@ export async function cancelCampaignArchive(channelName: string): Promise<void> 
 export async function rescheduleCampaignArchive(channelName: string): Promise<void> {
   await cancelCampaignArchive(channelName);
   await scheduleCampaignArchive(channelName);
+}
+
+/**
+ * Updates only existing pending archive and warning jobs to the weekend-safe
+ * dates. It never archives a channel, changes Production data, or creates a
+ * schedule for a campaign that was not already pending.
+ */
+export async function applyWeekendArchivePolicyToPendingCampaigns(): Promise<{
+  reviewed: number;
+  updated: number;
+  unchanged: number;
+  failed: number;
+}> {
+  const campaigns = await listPendingCampaignArchives();
+  const summary = { reviewed: campaigns.length, updated: 0, unchanged: 0, failed: 0 };
+
+  for (const campaign of campaigns) {
+    const archiveAfter = campaign.eventEndDate ? calculateArchiveDate(campaign.eventEndDate) : null;
+    if (!archiveAfter || !campaign.archiveTaskUid) {
+      summary.unchanged += 1;
+      continue;
+    }
+
+    const warningDate = calculateArchiveWarningDate(archiveAfter);
+    const archiveAlreadyMatches = campaign.archiveAfter && new Date(campaign.archiveAfter).getTime() === archiveAfter.getTime();
+    const warningAlreadyPassed = !campaign.warningTaskUid;
+    if (archiveAlreadyMatches && warningAlreadyPassed) {
+      summary.unchanged += 1;
+      continue;
+    }
+
+    try {
+      await updateHeartbeatJob(campaign.archiveTaskUid, {
+        cron: buildExactDateCron(archiveAfter),
+        description: buildArchiveJobDescription(campaign.channelName),
+      }, "");
+      if (campaign.warningTaskUid) {
+        await updateHeartbeatJob(campaign.warningTaskUid, {
+          cron: buildExactDateCron(warningDate),
+          description: buildArchiveWarningJobDescription(campaign.channelName),
+        }, "");
+      }
+      await updateCampaignArchive(campaign.id, { archiveAfter });
+      summary.updated += 1;
+    } catch (error) {
+      summary.failed += 1;
+      await logRelayAction({
+        campaignId: campaign.id,
+        action: "campaign_archive_weekend_policy",
+        outcome: "failed",
+        detail: redactErrorDetail(error),
+      }).catch(() => undefined);
+    }
+  }
+
+  const { syncSuperAdminArchiveDashboard } = await import("./super-admin");
+  await syncSuperAdminArchiveDashboard().catch(() => undefined);
+  return summary;
 }

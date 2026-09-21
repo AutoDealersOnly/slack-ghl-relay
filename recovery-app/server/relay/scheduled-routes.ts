@@ -25,10 +25,19 @@ import { uploadCampaignMailpieceImages } from "./mailpiece-images";
 import { fetchProductionRecord } from "./ghl";
 import { markSuperAdminArchiveCompleted } from "./super-admin";
 import { refreshOpenActivityDashboards } from "./activity-dashboard";
+import { isEasternWeekend } from "./scheduling";
 
 const scheduledRelayRouter = Router();
 export const ARCHIVE_WARNING_MESSAGE = "This channel is scheduled to archive tomorrow. Contact admin if the campaign needs to remain open.";
+export const MONDAY_ARCHIVE_WARNING_MESSAGE = "This channel is scheduled to archive on Monday. Contact admin if the campaign needs to remain open.";
 export const buildRelayKeepaliveResponse = () => ({ ok: true, service: "relay" });
+
+export const getArchiveWarningMessage = (archiveAfter: Date | string | null): string => {
+  const date = archiveAfter ? new Date(archiveAfter) : null;
+  return date && !Number.isNaN(date.getTime()) && new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", weekday: "short" }).format(date) === "Mon"
+    ? MONDAY_ARCHIVE_WARNING_MESSAGE
+    : ARCHIVE_WARNING_MESSAGE;
+};
 
 export function isAuthenticatedCronTask(user: { isCron?: boolean; taskUid?: string | null }): user is { isCron: true; taskUid: string } {
   return user.isCron === true && typeof user.taskUid === "string" && user.taskUid.length > 0;
@@ -63,6 +72,10 @@ scheduledRelayRouter.post("/archive", async (req: Request, res: Response) => {
       res.json({ ok: true, skipped: "autoarchive_paused" });
       return;
     }
+    if (isEasternWeekend()) {
+      res.json({ ok: true, skipped: "weekend_hold" });
+      return;
+    }
     const campaign = await getCampaignByScheduledTask(user.taskUid!, "archive");
     if (!campaign || campaign.archiveStatus === "archived" || campaign.archiveStatus === "cancelled") {
       res.json({ ok: true, skipped: "orphan_or_completed" });
@@ -94,13 +107,17 @@ scheduledRelayRouter.post("/archive-warning", async (req: Request, res: Response
       res.json({ ok: true, skipped: "autoarchive_paused" });
       return;
     }
+    if (isEasternWeekend()) {
+      res.json({ ok: true, skipped: "weekend_hold" });
+      return;
+    }
     const campaign = await getCampaignByScheduledTask(user.taskUid!, "warning");
     if (!campaign || campaign.archiveStatus !== "scheduled" || !campaign.channelId) {
       res.json({ ok: true, skipped: "orphan_or_completed" });
       return;
     }
     campaignId = campaign.id;
-    await postSlackMessage(campaign.channelId, ARCHIVE_WARNING_MESSAGE);
+    await postSlackMessage(campaign.channelId, getArchiveWarningMessage(campaign.archiveAfter));
     await logRelayAction({ campaignId: campaign.id, action: "campaign_archive_warning", outcome: "success", detail: "Archive warning posted to campaign channel." });
     await updateCampaignArchive(campaign.id, { warningTaskUid: null });
     if (campaign.warningTaskUid) await deleteHeartbeatJob(campaign.warningTaskUid, "").catch(() => undefined);
@@ -118,6 +135,10 @@ scheduledRelayRouter.post("/archive-reconcile", async (req: Request, res: Respon
   try {
     const user = await authenticateCron(req, res);
     if (!user) return;
+    if (isEasternWeekend()) {
+      res.json({ ok: true, skipped: "weekend_hold" });
+      return;
+    }
     const job = await getArchiveReconciliationJobByTaskUid(user.taskUid!);
     if (!job || !job.isEnabled) {
       res.json({ ok: true, skipped: "unknown_or_disabled_reconciliation_job" });

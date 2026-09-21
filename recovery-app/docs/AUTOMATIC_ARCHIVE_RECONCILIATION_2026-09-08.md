@@ -69,3 +69,11 @@ The immediate investigation found a next-event Sun Toyota record whose Event Sta
 David corrected the Sun Toyota Event End date and confirmed that the prior archive rule should resume without a new weekend or date rule. The daily reconciliation registration was re-enabled. A one-time normal reconciliation then inspected 23 current active channels, restored 15 future archive schedules, recorded one overdue channel for separate approval, skipped seven safe cases, and archived no channel. The two Sun Toyota Production records were read-only checked: the September campaign retains its September dates, and the October campaign now has matching October dates.
 
 The ABC Test command verification created an archive entry only because its historical Event End date is already past. That ABC-only entry was immediately cancelled; no live campaign schedule was changed by the verification. The normal daily reconciliation continues to skip overdue campaigns for approval rather than archiving them automatically.
+
+## Eastern-time weekend hold — September 21, 2026
+
+At David’s direction, **no automatic archive activity is permitted on Saturday or Sunday in Eastern time**. The ordinary three-calendar-day rule still determines the first planned archive date, but a date that falls on Saturday or Sunday automatically moves to Monday. If that move makes the archive date Monday, its warning is sent on Friday and says that the channel is scheduled to archive on Monday.
+
+This rule applies to all three automatic paths: the channel archive itself, its warning message, and the daily schedule-rebuild check. As a second safeguard, a callback that somehow reaches the relay on an Eastern-time weekend exits without archiving, posting a warning, or rebuilding schedules.
+
+Immediately after the rule was added, all 15 pending campaign archive records were reviewed and updated. The 32 active pending archive and warning jobs were checked afterward: none is scheduled for an Eastern-time Saturday or Sunday. No channel was archived, no Production record was changed, and no campaign date was edited during this update.
