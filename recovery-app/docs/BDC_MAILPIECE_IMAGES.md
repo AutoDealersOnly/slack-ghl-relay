@@ -12,7 +12,7 @@ The existing Sent to Print Slack notice remains the first action and keeps its e
 |---|---|---|
 | GoHighLevel workflow | Existing **GHL Production Message to Slack** Custom Webhook | Sends a headerless `POST` to `/api/relay/ghl/proof_status` with the Production name and proof stage. |
 | Slack app | Bot token includes `files:read` | Lists and downloads PDFs from the exact linked campaign channel. |
-| Dealership connection | Linked dealership subaccount connection can upload Media files and update custom values | Saves images to the correct dealership and writes the campaign values. |
+| Dealership connection | Linked dealership subaccount connection includes **Media Library write** (`medias.write`) and custom-value access | Saves images to the correct dealership and writes the campaign values. |
 | ADO Production record | Linked to a Dealership record and campaign Slack channel | Supplies the safe server-side relationship needed to resolve the destination. |
 
 Protected connection values, Slack group references, location identifiers, and API credentials stay in the Manus Keys and Codes only.
@@ -44,12 +44,14 @@ ABC Dealer was the required test subaccount. On September 11, 2026, the live pub
 
 On September 14, 2026, the 2609 Miracle Toyota P Sent to Print run confirmed the single-PDF one-page case. The initial action had fired but was blocked by that linked dealership connection lacking Media-upload permission. After the dealership permission was updated, the image-only retry proved the one-page condition and the minimal repair: the existing front image was retained, the back Campaign Details value was intentionally cleared, and the BDC completion message posted without changing Proof Stage or re-sending the original Sent to Print notice.
 
+On September 23, 2026, the live 2610 Kia Wesley Chapel AME Sent to Print run confirmed the same connection safeguard on a two-image campaign. The original Sent to Print notice posted, but the first image upload was refused because that dealership connection did not include Media Library write permission. After David added `medias.write` to that subaccount’s existing connection, one administrator-approved image-only retry reused the PDFs already in the campaign channel. Both JPEGs uploaded, both Campaign Details image values were updated, and the normal BDC completion message posted. The retry did not re-send the Sent to Print notice or modify Proof Stage.
+
 ## Recovery and troubleshooting
 
 1. Start from `docs/RECOVERY_INDEX.md` and the Manus Keys and Codes document.
 2. Restore the secret-free application from the company recovery branch and enter protected settings only through the secure configuration screen.
 3. Keep the existing proof-stage workflow and replace only its dead destination with `/api/relay/ghl/proof_status` under the current published relay URL.
-4. Confirm the Slack bot retains `files:read` and the ABC Dealer connection can upload Media files before testing.
+4. Confirm the Slack bot retains `files:read` and the ABC Dealer connection includes **Media Library write** (`medias.write`) before testing.
 5. Test all three supported cases in ABC Dealer when practical: two non-ENV PDFs plus an ENV PDF; one two-page non-ENV PDF; and one one-page non-ENV PDF. Verify the original notice, the expected image count, the front and back custom values, and the BDC completion message together.
 
 > **Rollback reference:** checkpoint `f48c58da` is the known-good baseline for the original Sent to Print notice alone. Do not restore retired Production Proof or Automated Proof Links experiments when rebuilding this image automation.
