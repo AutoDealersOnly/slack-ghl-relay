@@ -1,0 +1,210 @@
+<script>
+/*
+  QR Mail Builder add-on
+  Paste this entire block directly AFTER the original working QR Mail Builder code.
+  It does not replace or alter the existing API token or location ID lines.
+*/
+(function () {
+  if (window.__adoQrTwoUrlPatchLoaded) return;
+  window.__adoQrTwoUrlPatchLoaded = true;
+
+  const pinField = ALL_FIELDS.find(field => field.key === 'pin_code');
+  if (pinField) pinField.defaultOn = true;
+  if (!ALL_FIELDS.some(field => field.key === 'kbb_book_value')) {
+    ALL_FIELDS.push({ key: 'kbb_book_value', label: 'KBB Value', defaultOn: false });
+  }
+  if (!ALL_FIELDS.some(field => field.key === 'advertised_offer')) {
+    ALL_FIELDS.push({ key: 'advertised_offer', label: 'Advertised Offer', defaultOn: false });
+  }
+  PLACEHOLDERS.kbb_book_value = 'KBB_VALUE';
+  PLACEHOLDERS.advertised_offer = 'ADVERTISED_OFFER';
+
+  const originalGetActiveFields = getActiveFields;
+  getActiveFields = function (variantKey) {
+    const active = originalGetActiveFields(variantKey);
+    return active.includes('pin_code') ? active : [...active, 'pin_code'];
+  };
+  isCustomized = function (variantKey) {
+    if (rowCustomizations[variantKey] === undefined) return false;
+    const defaults = getDefaultFields();
+    const active = getActiveFields(variantKey);
+    return active.length !== defaults.length || !defaults.every(key => active.includes(key));
+  };
+
+  const optionalFields = [
+    { key: 'kbb_book_value', label: 'KBB Value' },
+    { key: 'advertised_offer', label: 'Advertised Offer' }
+  ];
+  const overlayPreview = document.querySelector('.overlay-preview');
+  if (overlayPreview) {
+    optionalFields.forEach(field => {
+      if (document.getElementById('chk_' + field.key)) return;
+      const option = document.createElement('label');
+      option.className = 'field-row';
+      option.innerHTML = `<input type="checkbox" id="chk_${field.key}" />
+        <span class="field-label">${field.label}</span>
+        <span class="field-key">${field.key}</span>`;
+      overlayPreview.before(option);
+    });
+
+    const pinCheckbox = document.getElementById('chk_pin_code');
+    const pinRow = pinCheckbox && pinCheckbox.closest('.field-row');
+    if (pinRow && !document.getElementById('adoQrAlwaysIncluded')) {
+      const requiredHeading = document.createElement('div');
+      requiredHeading.id = 'adoQrAlwaysIncluded';
+      requiredHeading.className = 'field-section-label';
+      requiredHeading.style.marginTop = '18px';
+      requiredHeading.textContent = 'Always Included';
+      const requiredRow = document.createElement('div');
+      requiredRow.className = 'field-row';
+      requiredRow.setAttribute('aria-label', 'PIN Code is always included');
+      requiredRow.innerHTML = '<input type="checkbox" checked disabled /><span class="field-label">PIN Code</span><span class="field-key">pin_code</span>';
+      overlayPreview.before(requiredHeading);
+      overlayPreview.before(requiredRow);
+      pinRow.remove();
+    }
+  }
+
+  const originalOpenCustomize = openCustomizeOverlay;
+  openCustomizeOverlay = function (variantKey, url, dealer, qrLabel) {
+    originalOpenCustomize(variantKey, url, dealer);
+    const pinCheckbox = document.getElementById('chk_pin_code');
+    if (pinCheckbox) {
+      pinCheckbox.checked = true;
+      pinCheckbox.disabled = true;
+    }
+    document.getElementById('overlayDealerName').textContent = `${dealer || 'Dealership'} — ${qrLabel || 'QR'}`;
+  };
+
+  const variantsByKey = new Map();
+
+  function QRLabel(label) {
+    return `<span class="qr-label" style="display:inline-flex;align-items:center;border:1px solid #c7d2fe;background:#eef2ff;color:#4338ca;border-radius:999px;padding:3px 8px;margin-bottom:7px;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;">${label}</span>`;
+  }
+
+  function buildQrCells(variant) {
+    const activeFields = getActiveFields(variant.key);
+    const purl = buildPurl(variant.qrUrl, activeFields);
+    const customized = isCustomized(variant.key);
+    const baseUrlHtml = variant.qrUrl
+      ? `<div class="url-text">${escHtml(variant.qrUrl)}</div>
+         <div class="btn-row">
+           <button class="copy-btn" data-copy="${escHtml(variant.qrUrl)}">&#128203; Copy</button>
+           <a class="test-btn" href="${escHtml(variant.qrUrl)}" target="_blank" rel="noopener">&#x2197; TEST</a>
+         </div>`
+      : '<div class="url-text missing">No QR URL set on dealership record</div>';
+    const purlHtml = variant.qrUrl
+      ? `<div class="url-text">${escHtml(purl)}</div>
+         <div class="btn-row">
+           <button class="copy-btn" data-copy="${escHtml(purl)}">&#128203; Copy</button>
+           <button class="qr-two-customize-btn customize-btn" data-variant-key="${escHtml(variant.key)}">&#9881; Customize</button>
+           <button class="qr-two-instructions-btn instructions-btn" data-variant-key="${escHtml(variant.key)}">&#128233; Instructions</button>
+         </div>
+         ${customized ? `<div class="purl-meta"><span class="customized-label">Customized</span><button class="qr-two-restore-btn restore-btn" data-variant-key="${escHtml(variant.key)}">Restore</button></div>` : ''}`
+      : '<div class="url-text missing">No base URL</div>';
+    return { base: QRLabel(variant.label) + baseUrlHtml, purl: QRLabel(variant.label) + purlHtml };
+  }
+
+  renderTable = function (rows) {
+    // Ignore the one initial result from the original page loader; the replacement loader below supplies both QR URLs.
+    if (rows.length && !Object.prototype.hasOwnProperty.call(rows[0], 'qrUrl1')) return;
+    cachedRows = rows;
+    const display = showLiveActive ? rows : rows.filter(row => row.status !== 'live_active');
+
+    const bar = document.getElementById('summaryBar');
+    bar.style.display = 'flex';
+    bar.innerHTML = `
+      <div class="summary-chip"><strong>${rows.length}</strong> Total Records</div>
+      <div class="summary-chip"><strong>${rows.filter(row => row.status === 'production').length}</strong> Production</div>
+      <div class="summary-chip"><strong>${rows.filter(row => row.status === 'post_production').length}</strong> Post Production</div>
+      <div class="summary-chip"><strong>${rows.filter(row => row.status === 'live_active').length}</strong> Live Active</div>`;
+
+    if (!display.length) {
+      document.getElementById('content').innerHTML = '<div class="state-box">No records found in Production or Post Production.</div>';
+      return;
+    }
+
+    variantsByKey.clear();
+    const tableRows = display.map(row => {
+      const campaignKey = row.campaignKey || `${row.dealerName}-${row.jobNumbers}-${row.status}`;
+      const variants = [
+        { key: `${campaignKey}:qr1`, label: 'QR 1', dealerName: row.dealerName, qrUrl: row.qrUrl1 || '' },
+        { key: `${campaignKey}:qr2`, label: 'QR 2', dealerName: row.dealerName, qrUrl: row.qrUrl2 || '' }
+      ];
+      variants.forEach(variant => variantsByKey.set(variant.key, variant));
+
+      const statusClass = row.status === 'production' ? 'status-production' : row.status === 'post_production' ? 'status-post_production' : 'status-live_active';
+      const statusLabel = row.status === 'production' ? 'Production' : row.status === 'post_production' ? 'Post Production' : 'Live Active';
+      const jobNumbers = row.jobNumbers
+        ? row.jobNumbers.trim().split(/\s+/).map(job => `<span class="job-num">${escHtml(job)}</span>`).join('')
+        : '<span class="job-num-empty">—</span>';
+
+      return variants.map((variant, index) => {
+        const cells = buildQrCells(variant);
+        return `<tr${index ? ' style="border-top:1px dashed #e2e8f0;"' : ''}>
+          ${index === 0 ? `<td class="dealer-name" rowspan="2">${escHtml(row.dealerName || '—')}</td><td rowspan="2">${jobNumbers}</td><td rowspan="2"><span class="status-badge ${statusClass}">${statusLabel}</span></td>` : ''}
+          <td class="url-cell">${cells.base}</td><td class="url-cell">${cells.purl}</td>
+        </tr>`;
+      }).join('');
+    }).join('');
+
+    document.getElementById('content').innerHTML = `<div class="table-wrap"><table><thead><tr><th>Dealership</th><th>Job #(s)</th><th>Status</th><th>Base QR URL</th><th>PURL (for QR Code)</th></tr></thead><tbody>${tableRows}</tbody></table></div>`;
+  };
+
+  async function loadTwoQrData() {
+    document.getElementById('summaryBar').style.display = 'none';
+    document.getElementById('content').innerHTML = '<div class="state-box"><div class="spinner"></div>Loading records from GoHighLevel…</div>';
+    try {
+      const records = await fetchAllProductionRecords();
+      const rows = await Promise.all(records.map(async record => {
+        const properties = record.properties || {};
+        const dealershipRelation = (record.relations || []).find(relation => relation.objectKey === 'custom_objects.dealerships');
+        const dealership = dealershipRelation ? await fetchDealership(dealershipRelation.recordId) : null;
+        return {
+          campaignKey: String(record.id || record._id || `${properties.dealership || dealership?.dealership_name || 'campaign'}-${properties.job_numbers || ''}`),
+          dealerName: properties.dealership || dealership?.dealership_name || '—',
+          status: (properties.status || '').toLowerCase(),
+          jobNumbers: properties.job_numbers || '',
+          qrUrl1: dealership?.qr_url || '',
+          qrUrl2: dealership?.qr_url_2 || ''
+        };
+      }));
+      const order = { production: 0, post_production: 1, live_active: 2 };
+      rows.sort((left, right) => (order[left.status] ?? 9) - (order[right.status] ?? 9) || left.dealerName.localeCompare(right.dealerName));
+      renderTable(rows);
+    } catch (error) {
+      document.getElementById('content').innerHTML = `<div class="state-box error"><strong>Error:</strong> ${escHtml(error.message)}</div>`;
+    }
+  }
+
+  const oldRefreshButton = document.getElementById('refreshBtn');
+  const newRefreshButton = oldRefreshButton.cloneNode(true);
+  oldRefreshButton.replaceWith(newRefreshButton);
+  newRefreshButton.addEventListener('click', loadTwoQrData);
+
+  document.addEventListener('click', event => {
+    const customizeButton = event.target.closest('.qr-two-customize-btn');
+    if (customizeButton) {
+      const variant = variantsByKey.get(customizeButton.dataset.variantKey);
+      if (variant) openCustomizeOverlay(variant.key, variant.qrUrl, variant.dealerName, variant.label);
+      return;
+    }
+    const instructionsButton = event.target.closest('.qr-two-instructions-btn');
+    if (instructionsButton) {
+      const variant = variantsByKey.get(instructionsButton.dataset.variantKey);
+      if (!variant) return;
+      document.getElementById('instructionsDealerName').textContent = `${variant.dealerName || '—'} — ${variant.label}`;
+      document.getElementById('instructionsTextBox').textContent = buildInstructionsText({ dealerName: variant.dealerName, qrUrl: variant.qrUrl }, getActiveFields(variant.key));
+      document.getElementById('instructionsBackdrop').classList.remove('hidden');
+      return;
+    }
+    const restoreButton = event.target.closest('.qr-two-restore-btn');
+    if (restoreButton) {
+      delete rowCustomizations[restoreButton.dataset.variantKey];
+      renderTable(cachedRows);
+    }
+  });
+
+  loadTwoQrData();
+})();
+</script>
