@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
-import { logRelayAction } from "./db";
+import { createWebhookReceipt, finishWebhookReceipt, logRelayAction } from "./db";
+import { makePayloadHash, makeWebhookDeliveryKey } from "./naming";
 import { redactErrorDetail } from "./security";
 import {
   dealershipWebhookPayloadSchema,
@@ -7,19 +8,7 @@ import {
   type DealershipWebhookPayload,
   type ProductionWebhookPayload,
 } from "./types";
-import { ensureCampaignChannelAndCanvas, isSentToPrintProofStage, refreshProductionCanvas, sendProofStageNotice, syncCampaignValues, syncDealershipValues } from "./workflows";
-
-const SENT_TO_PRINT_REQUEST_BUDGET_MS = 55_000;
-
-function withinSentToPrintRequestBudget<T>(work: Promise<T>): Promise<T> {
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  const budget = new Promise<never>((_, reject) => {
-    timeout = setTimeout(() => reject(new Error("Sent-to-Print BDC image work exceeded the request budget")), SENT_TO_PRINT_REQUEST_BUDGET_MS);
-  });
-  return Promise.race([work, budget]).finally(() => {
-    if (timeout) clearTimeout(timeout);
-  });
-}
+import { ensureCampaignChannelAndCanvas, refreshProductionCanvas, sendProofStageNotice, syncCampaignValues, syncDealershipValues } from "./workflows";
 
 /**
  * Parses the exact lightweight payload used by the former Production Update
@@ -74,12 +63,62 @@ export const handleLegacyGhlWebhook = (req: Request, res: Response) => {
     );
 };
 
+export type LegacyProofStatusWorkDependencies = {
+  createReceipt: typeof createWebhookReceipt;
+  finishReceipt: typeof finishWebhookReceipt;
+  sendNotice: typeof sendProofStageNotice;
+  logAction: typeof logRelayAction;
+};
+
+const legacyProofStatusWorkDependencies: LegacyProofStatusWorkDependencies = {
+  createReceipt: createWebhookReceipt,
+  finishReceipt: finishWebhookReceipt,
+  sendNotice: sendProofStageNotice,
+  logAction: logRelayAction,
+};
+
 /**
- * Non-Sent-to-Print proof stages retain the preserved immediate response.
- * Sent to Print waits only within a short budget, after its unchanged notice,
- * so the BDC image worker is not terminated after the response is sent.
+ * The preserved proof notice and BDC image work continue after GoHighLevel
+ * receives its immediate acknowledgement. A receipt blocks a delivery retry
+ * from posting another Sent to Print message while that original work runs.
  */
-export const handleLegacyProofStatusWebhook = async (req: Request, res: Response) => {
+export async function processLegacyProofStatusWebhook(
+  payload: ProductionWebhookPayload,
+  dependencies: LegacyProofStatusWorkDependencies = legacyProofStatusWorkDependencies
+): Promise<"processed" | "duplicate"> {
+  const deliveryKey = makeWebhookDeliveryKey("proof_status", payload);
+  const receipt = await dependencies.createReceipt({
+    deliveryKey,
+    eventType: "proof_status",
+    payloadHash: makePayloadHash(payload),
+  });
+  if (!receipt.accepted) return "duplicate";
+
+  try {
+    await dependencies.sendNotice(payload);
+    await dependencies.finishReceipt(deliveryKey, "processed");
+    return "processed";
+  } catch (error) {
+    await dependencies.finishReceipt(deliveryKey, "failed").catch(() => undefined);
+    await dependencies.logAction({
+      action: "legacy_proof_status_webhook",
+      outcome: "failed",
+      detail: redactErrorDetail(error),
+    }).catch(() => undefined);
+    throw error;
+  }
+}
+
+/**
+ * The legacy GoHighLevel proof webhook must return immediately. Sent-to-Print
+ * BDC processing continues in the existing duplicate-safe worker after that
+ * acknowledgement, just like the other legacy relay handlers.
+ */
+export const handleLegacyProofStatusWebhook = (
+  req: Request,
+  res: Response,
+  dependencies: LegacyProofStatusWorkDependencies = legacyProofStatusWorkDependencies
+) => {
   const payload = parseLegacyGhlWebhookPayload(req.body);
   if (!payload) {
     res.status(200).send("ok");
@@ -91,28 +130,8 @@ export const handleLegacyProofStatusWebhook = async (req: Request, res: Response
     return;
   }
 
-  if (!isSentToPrintProofStage(payload.proof_stage)) {
-    res.status(200).send("ok");
-    void sendProofStageNotice(payload).catch(error =>
-      logRelayAction({
-        action: "legacy_proof_status_webhook",
-        outcome: "failed",
-        detail: redactErrorDetail(error),
-      })
-    );
-    return;
-  }
-
-  try {
-    await withinSentToPrintRequestBudget(sendProofStageNotice(payload));
-  } catch (error) {
-    await logRelayAction({
-      action: "legacy_proof_status_webhook",
-      outcome: "failed",
-      detail: redactErrorDetail(error),
-    }).catch(() => undefined);
-  }
   res.status(200).send("ok");
+  void processLegacyProofStatusWebhook(payload, dependencies).catch(() => undefined);
 };
 
 /**

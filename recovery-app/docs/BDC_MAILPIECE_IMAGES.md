@@ -34,9 +34,9 @@ The relay uploads JPEGs to the linked dealership’s Media library. For a one-pa
 
 ## Execution and safety rules
 
-The final implementation uses the original native PDF-to-JPEG renderer that was proven in the first ABC controlled run. It runs within the original Sent to Print request after the Slack notice, with a bounded request budget. The abandoned one-time BDC scheduler is not used for this workflow; archive scheduling remains separate and unchanged.
+The final implementation uses the original native PDF-to-JPEG renderer that was proven in the first ABC controlled run. The proof-status receiver first returns an immediate `ok` to GoHighLevel, then starts the unchanged Sent to Print notice and BDC image work in the background. This prevents GoHighLevel from retrying a slow image upload and posting extra Sent to Print notices. Archive scheduling remains separate and unchanged.
 
-Each image upload is guarded by campaign, Slack file, and page number. A duplicate webhook therefore reuses a successful upload rather than adding duplicate Media files. If selection, download, rendering, upload, or a required image is incomplete, the Campaign Details values remain unchanged and no BDC completion message is sent. The only intentional single-image exception is a verified one-page single-PDF mailpiece, which clears the back value as described above.
+Before it starts the work, the receiver saves a normal proof-status receipt. A retry of the same proof-stage delivery therefore stops safely without posting another Sent to Print notice or starting another image run. Each image upload is also guarded by campaign, Slack file, and page number, so an interrupted image run reuses a successful upload rather than adding duplicate Media files. If selection, download, rendering, upload, or a required image is incomplete, the Campaign Details values remain unchanged and no BDC completion message is sent. The only intentional single-image exception is a verified one-page single-PDF mailpiece, which clears the back value as described above.
 
 ## Verification record
 
@@ -45,6 +45,8 @@ ABC Dealer was the required test subaccount. On September 11, 2026, the live pub
 On September 14, 2026, the 2609 Miracle Toyota P Sent to Print run confirmed the single-PDF one-page case. The initial action had fired but was blocked by that linked dealership connection lacking Media-upload permission. After the dealership permission was updated, the image-only retry proved the one-page condition and the minimal repair: the existing front image was retained, the back Campaign Details value was intentionally cleared, and the BDC completion message posted without changing Proof Stage or re-sending the original Sent to Print notice.
 
 On September 23, 2026, the live 2610 Kia Wesley Chapel AME Sent to Print run confirmed the same connection safeguard on a two-image campaign. The original Sent to Print notice posted, but the first image upload was refused because that dealership connection did not include Media Library write permission. After David added `medias.write` to that subaccount’s existing connection, one administrator-approved image-only retry reused the PDFs already in the campaign channel. Both JPEGs uploaded, both Campaign Details image values were updated, and the normal BDC completion message posted. The retry did not re-send the Sent to Print notice or modify Proof Stage.
+
+On September 30, 2026, repeated Sent to Print notices were traced to GoHighLevel retrying a webhook that stayed open while BDC image work ran. The proof-status receiver was repaired to acknowledge immediately and retain a proof-status receipt before it starts the unchanged notice and image work. The repair prevents a retry from posting an additional notice or starting another image run; it does not change the renderer, PDF selection, Media upload, Campaign Details values, proof stage, message wording, or recipient.
 
 ## Recovery and troubleshooting
 
