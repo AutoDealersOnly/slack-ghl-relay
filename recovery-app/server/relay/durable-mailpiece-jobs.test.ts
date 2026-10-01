@@ -1,9 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 import { getDatabaseAffectedRows, isDuplicateDatabaseEntryError, isMailpieceImageJobRunEligible, isMailpieceImageJobSchedulingEligible } from "./db";
 import { isAuthenticatedCronTask } from "./scheduled-routes";
-import { postProofNoticeThenProcessMailpieceImages } from "./workflows";
+import { postProofNoticeThenProcessMailpieceImages, queueSentToPrintMailpieceImages } from "./workflows";
 
 describe("Sent-to-Print BDC image processing", () => {
+  it("hands Sent-to-Print image work to the existing durable queue instead of rendering in the acknowledged webhook", async () => {
+    const enqueue = vi.fn(async () => "scheduled" as const);
+
+    await expect(
+      queueSentToPrintMailpieceImages({ id: 42, channelName: "2609-abc-test-ame" }, enqueue)
+    ).resolves.toBe("scheduled");
+
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(enqueue).toHaveBeenCalledWith({ id: 42, channelName: "2609-abc-test-ame" });
+  });
+
   it("posts and logs the original Sent to Print notice before image work", async () => {
     const steps: string[] = [];
     await postProofNoticeThenProcessMailpieceImages({

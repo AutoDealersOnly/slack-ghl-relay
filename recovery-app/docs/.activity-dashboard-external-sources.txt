@@ -1,0 +1,33 @@
+External research saved 2026-09-17 for Activity Dashboard planning.
+
+Slack Canvas capabilities
+- https://docs.slack.dev/reference/methods/canvases.create
+  Slack documents that a standalone Canvas can be created with a title and initial Markdown. Passing a channel ID can add it automatically as a channel tab. The Canvas API supports `canvases:write`. Slack notes that some free teams are limited to one Canvas tab per channel.
+- https://docs.slack.dev/reference/methods/conversations.canvases.create
+  Slack documents that creating a channel Canvas when one already exists returns `channel_canvas_already_exists`, and the current channel Canvas ID can be read from `conversations.info`. This is why the existing Production Canvas must never be used or replaced for the separate Activity Dashboard.
+- https://slack.com/help/articles/32562841868307-Add-and-manage-tabs-in-channels-and-direct-messages
+  Slack says channels can have up to 15 tabs covering Canvases and lists, workflows, messages, links, and files.
+
+GoHighLevel workflow and tag capabilities
+- https://help.gohighlevel.com/support/solutions/articles/155000002675-workflow-trigger-customer-booked-appointment
+  The Customer Booked Appointment workflow trigger runs when a customer independently books a regular appointment. It can be filtered by contact tag, calendar, or calendar group; it does not fire for manually booked appointments.
+- https://help.gohighlevel.com/support/solutions/articles/155000003111-workflow-action-add-contact-tag
+  The Add Contact Tag workflow action can add one or more existing or newly created tags; tags may represent behavior or source. A separate Remove Contact Tag action removes a tag from the contact record.
+- https://marketplace.gohighlevel.com/docs/ghl/contacts/search-contacts-advanced/
+  GoHighLevel exposes location-scoped Contact Search in API v3 under `contacts.readonly`.
+- https://marketplace.gohighlevel.com/docs/ghl/emails/list-workflow-campaigns/
+  GoHighLevel’s published workflow-campaign listing supports filtering by `published` or `draft`, so an inventory can intentionally exclude unpublished workflows.
+
+Read-only ABC Test discovery
+- A published-only API inventory on 2026-09-17 returned 37 published ABC Dealer workflows. Relevant published names found were: QR Code Form Visit, QR Code Appointment, QR Visit SMS Follow-Up, Appointment QR Code SMS, Call Dispositions Appointment Set, Tag Appointment Set - Move to Appointment, Create Opp from Appointment, Customer/AI Appointment Booked - Move to Unconfirmed, and AI Booked Appointment - Move to Unconfirmed. It did not reveal detailed trigger/action contents through the available read endpoint.
+- The browser’s visible ABC Dealer Automation view also showed *QR Code Workflows and 1Click folders. No workflow, tag, contact, appointment, or configuration was modified.
+- User rule: ignore all unpublished workflows; treat only published workflows as active operational behavior.
+
+2026-09-18 Phone and SMS source research:
+- HighLevel Call Details trigger official guide: https://help.gohighlevel.com/support/solutions/articles/48001212511-workflow-trigger-call-details
+  It supports Call Direction, Call Status, Number Pool, Custom Disposition, and phone-number filters. The guide distinguishes system Call Status from Custom Disposition and recommends the specific Custom Disposition when a staff-selected outcome is intended. This supports the safe Phone rule: incoming call + existing appointment-set custom disposition, not generic completed status.
+- HighLevel Appointment Status trigger official guide: https://help.gohighlevel.com/support/solutions/articles/155000002619-workflow-trigger-appointment-status
+  It supports new/confirmed/cancelled/showed/no-show/invalid status plus tag, calendar, calendar group, and Modified By filters. Rescheduling is treated as a new appointment. This supports adding a source tag immediately after a known appointment-creation action rather than tagging a general text reply.
+- HighLevel Customer Booked Appointment trigger official guide: https://help.gohighlevel.com/support/solutions/articles/155000002675-workflow-trigger-customer-booked-appointment
+  It only applies to customer self-booked appointments, has tag/calendar filters, and does not cover human-entered appointments. This is not sufficient to label BDC phone and SMS appointments.
+- ABC Dealer read-only published workflow inventory confirmed the following relevant published names: Call Dispositions Appointment Set; Appointment QR Code SMS; QR Code Appointment; QR Code Form Visit; QR Visit SMS Follow-Up. It did not expose workflow content, contacts, identifiers, protected links, or credentials. GoHighLevel workflow detail API did not provide a readable detail response in this integration, so exact existing disposition settings must be checked visually before building the new ABC-only tag workflow.

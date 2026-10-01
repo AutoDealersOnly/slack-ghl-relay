@@ -13,12 +13,12 @@ import { normalizeCampaignChannelName } from "./naming";
 import { claimProofPdfAttachment, finishProofPdfAttachment, getCampaignByChannelName, logRelayAction, upsertCampaign } from "./db";
 import {
   cancelCampaignArchive,
+  enqueueCampaignMailpieceImageJob,
   rescheduleCampaignArchive,
   scheduleCampaignArchive,
   shouldReconcileArchiveSchedule,
   shouldRescheduleArchive,
 } from "./scheduling";
-import { uploadCampaignMailpieceImages } from "./mailpiece-images";
 import { redactErrorDetail } from "./security";
 import {
   archiveSlackChannel,
@@ -172,6 +172,18 @@ export const buildProofStageMessage = (
 
 export const buildProofPdfAddedMessage = (fileName: string): string => `*${fileName}* PDF has been added to the production record.`;
 
+/**
+ * Starts the existing durable worker after the Sent-to-Print notice. The
+ * worker, rather than the acknowledged webhook request, owns the long-running
+ * PDF rendering and dealership upload work.
+ */
+export async function queueSentToPrintMailpieceImages(
+  campaign: { id: number; channelName: string },
+  enqueue: typeof enqueueCampaignMailpieceImageJob = enqueueCampaignMailpieceImageJob
+) {
+  return enqueue({ id: campaign.id, channelName: campaign.channelName });
+}
+
 export async function postProofNoticeThenProcessMailpieceImages(input: {
   isSentToPrint: boolean;
   postNotice: () => Promise<void>;
@@ -269,15 +281,18 @@ export async function sendProofStageNotice(payload: ProductionWebhookPayload) {
     isSentToPrint: isSentToPrintProofStage(proofStage),
     postNotice: () => postSlackMessage(campaign.channelId!, message),
     logNotice: () => logRelayAction({ campaignId: campaign.id, action: "proof_stage_notice", outcome: "success", detail: "Proof-stage notice posted to the campaign channel." }),
+    // The webhook has already acknowledged GoHighLevel. Queue the longer PDF,
+    // render, Media Library, and custom-value work in its authenticated durable
+    // worker instead of keeping it alive in this detached request.
     processMailpieceImages: async () => {
-      await uploadCampaignMailpieceImages({ campaign, production: context.production });
+      await queueSentToPrintMailpieceImages(campaign);
     },
     logMailpieceProcessingFailure: error =>
       logRelayAction({
         campaignId: campaign.id,
         action: "bdc_mailpiece_images",
         outcome: "failed",
-        detail: `Sent-to-Print notice posted, but BDC mailpiece image processing did not complete: ${redactErrorDetail(error)}`,
+        detail: `Sent-to-Print notice posted, but the durable BDC mailpiece job could not be queued: ${redactErrorDetail(error)}`,
       }),
   });
 }

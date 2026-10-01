@@ -1,0 +1,10 @@
+Read-only Activity Dashboard discovery, 2026-09-17:
+- Slack supports a normal channel Canvas plus separately created Canvas tabs; Slack documents up to 15 featured channel tabs. The existing Production Canvas must remain unchanged.
+- ADO’s existing relay uses a private server-side Slack bot connection and direct Canvas editing safeguards. Super Admin Canvas work is currently pending its final ABC-only manager test; do not change that work while implementing Activity Dashboard.
+- ABC Dealer is available as the only live test environment. Its Automation page contains a `*QR Code Workflows` folder and a `1Click` folder. No workflows, tags, campaigns, contacts, call handling, or appointments were changed during this review.
+- Existing relay records store Campaign channel and Event End but not Event Start or a separate Activity Dashboard Canvas reference. A new, additive record is needed for a separate Activity Dashboard Canvas and campaign activity measurement.
+- The user confirmed the desired collection period: from 7 calendar days before Event Start through normal channel archive, which occurs 3 days after Event End.
+- Existing QR tags are `QR Visit` and `QR Appointment`. The user requires QR Visit to be removed when QR Appointment is added so no person is counted twice in the current-status rows.
+- Current contact tags alone do not preserve when a tag was applied. Because QR Visit will be removed after an appointment, accurate in-window totals require an append-only, timestamped relay event record created when the applicable tag is added. The dashboard can then show total QR scans, QR appointments, and unconverted QR visits without double-counting.
+- Phone, SMS, and OneClick source tag/rule names are not yet known and must not be guessed. The initial ABC-only build should show them as not yet configured until David identifies their existing tags/workflows or chooses names.
+- Existing full tests passed before any Activity Dashboard source work: 124 tests passed; 13 credential-gated checks skipped; TypeScript passed.
