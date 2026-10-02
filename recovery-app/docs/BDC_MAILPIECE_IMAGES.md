@@ -50,6 +50,8 @@ On September 30, 2026, repeated Sent to Print notices were traced to GoHighLevel
 
 On October 1, 2026, several live Sent to Print image runs revealed that the image work could still hang when it was attempted inside the already-acknowledged background request. The remaining heavy work was therefore moved back to the existing durable worker. The notice still posts first, and the worker retains the same file mapping, duplicate safeguards, Media Library upload, custom-value update, and completion message. The 2610 Stokes Hodges Kia AME item that exposed the hang was recovered once using the existing exact image action; it completed with both images and the normal confirmation, without changing Proof Stage or re-sending the Sent to Print notice.
 
+On October 2, 2026, a real Stokes Hodges Kia AME reprint showed that a webhook can arrive a few seconds before GoHighLevel makes its new Sent to Print value available to the relay. The receiver now waits briefly for the saved value, and each newly saved Sent to Print change receives its own protected receipt. **Every new move to Sent to Print runs the full image action again**: it posts the normal notice, reopens the completed durable image job for that reprint, reads the current channel PDFs, updates the dealership Media Library and BDC custom values, and posts the normal confirmation. This still rejects duplicate deliveries of the same saved change. The platform worker can start a few minutes after its scheduled minute; do not manually run a second action while its job is still scheduled or processing.
+
 ## Recovery and troubleshooting
 
 1. Start from `docs/RECOVERY_INDEX.md` and the Manus Keys and Codes document.

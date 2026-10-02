@@ -847,8 +847,13 @@ export function isMailpieceImageJobSchedulingEligible(input: {
 /**
  * Creates one durable job per campaign. A fresh Sent-to-Print delivery cannot
  * create a duplicate job, and a failed job is eligible to be scheduled again.
+ * A newly accepted reprint can explicitly reopen a completed job; only the
+ * proof-webhook receipt layer is allowed to request that path.
  */
-export async function claimMailpieceImageJobForScheduling(campaignId: number): Promise<MailpieceImageJobScheduleClaim> {
+export async function claimMailpieceImageJobForScheduling(
+  campaignId: number,
+  options: { requeueCompleted?: boolean } = {}
+): Promise<MailpieceImageJobScheduleClaim> {
   const db = await getDb();
   if (!db) throw new Error("Relay database is unavailable");
 
@@ -859,8 +864,17 @@ export async function claimMailpieceImageJobForScheduling(campaignId: number): P
   }
 
   const rows = await db.select().from(relayMailpieceImageJobs).where(eq(relayMailpieceImageJobs.campaignId, campaignId)).limit(1);
-  const job = rows[0];
+  let job = rows[0];
   if (!job) throw new Error("Mailpiece image job was not found after creation");
+  if (job.status === "completed" && options.requeueCompleted) {
+    const reopened = await db
+      .update(relayMailpieceImageJobs)
+      .set({ status: "pending", taskUid: null, scheduledFor: null, startedAt: null, finishedAt: null, lastError: null })
+      .where(and(eq(relayMailpieceImageJobs.id, job.id), eq(relayMailpieceImageJobs.status, "completed")));
+    if (getDatabaseAffectedRows(reopened) === 1) {
+      job = (await db.select().from(relayMailpieceImageJobs).where(eq(relayMailpieceImageJobs.id, job.id)).limit(1))[0] ?? job;
+    }
+  }
   if (!isMailpieceImageJobSchedulingEligible({ status: job.status, updatedAt: job.updatedAt })) {
     return { job, shouldSchedule: false, priorTaskUid: null };
   }

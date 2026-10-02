@@ -15,6 +15,7 @@ const proofDependencies = (overrides: Partial<LegacyProofStatusWorkDependencies>
   finishReceipt: vi.fn(async () => undefined),
   sendNotice: vi.fn(async () => undefined),
   logAction: vi.fn(async () => undefined),
+  resolveDelivery: vi.fn(async payload => ({ payload, recordVersion: "first-save" })),
   ...overrides,
 });
 
@@ -68,6 +69,7 @@ describe("legacy GHL Canvas-refresh webhook payload", () => {
     expect(response.send).toHaveBeenCalledWith("ok");
     expect(dependencies.sendNotice).not.toHaveBeenCalled();
 
+    await vi.waitFor(() => expect(dependencies.createReceipt).toHaveBeenCalledOnce());
     releaseReceipt?.({ accepted: true });
     await vi.waitFor(() => expect(dependencies.sendNotice).toHaveBeenCalledWith(proofPayload));
   });
@@ -80,5 +82,23 @@ describe("legacy GHL Canvas-refresh webhook payload", () => {
     await expect(processLegacyProofStatusWebhook(proofPayload, dependencies)).resolves.toBe("duplicate");
     expect(dependencies.sendNotice).not.toHaveBeenCalled();
     expect(dependencies.finishReceipt).not.toHaveBeenCalled();
+  });
+
+  it("uses the freshly resolved stage and record version so a real reprint is not treated as an old retry", async () => {
+    const first = proofDependencies({
+      resolveDelivery: vi.fn(async payload => ({ payload: { ...payload, proof_stage: "sent_to_print" }, recordVersion: "first-save" })),
+    });
+    const second = proofDependencies({
+      resolveDelivery: vi.fn(async payload => ({ payload: { ...payload, proof_stage: "sent_to_print" }, recordVersion: "later-reprint-save" })),
+    });
+
+    await processLegacyProofStatusWebhook({ production_name: "2609 ABC Test AME" }, first);
+    await processLegacyProofStatusWebhook({ production_name: "2609 ABC Test AME" }, second);
+
+    expect(first.sendNotice).toHaveBeenCalledWith({ production_name: "2609 ABC Test AME", proof_stage: "sent_to_print" });
+    expect(second.sendNotice).toHaveBeenCalledWith({ production_name: "2609 ABC Test AME", proof_stage: "sent_to_print" });
+    const firstKey = (first.createReceipt as ReturnType<typeof vi.fn>).mock.calls[0][0].deliveryKey;
+    const secondKey = (second.createReceipt as ReturnType<typeof vi.fn>).mock.calls[0][0].deliveryKey;
+    expect(firstKey).not.toBe(secondKey);
   });
 });

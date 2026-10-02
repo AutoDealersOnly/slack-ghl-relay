@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { createWebhookReceipt, finishWebhookReceipt, logRelayAction } from "./db";
-import { makePayloadHash, makeWebhookDeliveryKey } from "./naming";
+import { fetchProductionRecord } from "./ghl";
+import { makePayloadHash, makeWebhookDeliveryKey, normalizeCampaignChannelName } from "./naming";
 import { redactErrorDetail } from "./security";
 import {
   dealershipWebhookPayloadSchema,
@@ -68,13 +69,47 @@ export type LegacyProofStatusWorkDependencies = {
   finishReceipt: typeof finishWebhookReceipt;
   sendNotice: typeof sendProofStageNotice;
   logAction: typeof logRelayAction;
+  resolveDelivery: (payload: ProductionWebhookPayload) => Promise<ResolvedProofDelivery>;
 };
+
+type ResolvedProofDelivery = {
+  payload: ProductionWebhookPayload;
+  recordVersion: string | null;
+};
+
+const LEGACY_PROOF_STAGE_REFRESH_DELAYS_MS = [0, 4_000, 10_000, 20_000] as const;
+
+const delay = (milliseconds: number) => new Promise<void>(resolve => setTimeout(resolve, milliseconds));
+
+/**
+ * A legacy proof webhook contains only the Production name. GoHighLevel may
+ * deliver it a few seconds before the changed Proof Stage is readable. Wait a
+ * short bounded period, then include the current record version in the receipt
+ * key so a real later reprint is not mistaken for an old delivery retry.
+ */
+export async function resolveLegacyProofDelivery(payload: ProductionWebhookPayload): Promise<ResolvedProofDelivery> {
+  const channelName = payload.channel_name || normalizeCampaignChannelName(payload.production_name);
+  let lastRecord: Awaited<ReturnType<typeof fetchProductionRecord>> | null = null;
+  for (const waitMs of LEGACY_PROOF_STAGE_REFRESH_DELAYS_MS) {
+    if (waitMs > 0) await delay(waitMs);
+    const record = await fetchProductionRecord(channelName);
+    lastRecord = record;
+    const proofStage = payload.proof_stage?.trim() || record?.properties.proof_stage?.trim();
+    if (proofStage) {
+      const recordVersion = String((record as { updatedAt?: unknown } | null)?.updatedAt ?? "").trim() || null;
+      return { payload: { ...payload, proof_stage: proofStage }, recordVersion };
+    }
+  }
+  const recordVersion = String((lastRecord as { updatedAt?: unknown } | null)?.updatedAt ?? "").trim() || null;
+  return { payload, recordVersion };
+}
 
 const legacyProofStatusWorkDependencies: LegacyProofStatusWorkDependencies = {
   createReceipt: createWebhookReceipt,
   finishReceipt: finishWebhookReceipt,
   sendNotice: sendProofStageNotice,
   logAction: logRelayAction,
+  resolveDelivery: resolveLegacyProofDelivery,
 };
 
 /**
@@ -86,16 +121,18 @@ export async function processLegacyProofStatusWebhook(
   payload: ProductionWebhookPayload,
   dependencies: LegacyProofStatusWorkDependencies = legacyProofStatusWorkDependencies
 ): Promise<"processed" | "duplicate"> {
-  const deliveryKey = makeWebhookDeliveryKey("proof_status", payload);
+  const resolved = await dependencies.resolveDelivery(payload);
+  const receiptPayload = { ...resolved.payload, proof_record_version: resolved.recordVersion ?? "" };
+  const deliveryKey = makeWebhookDeliveryKey("proof_status", receiptPayload);
   const receipt = await dependencies.createReceipt({
     deliveryKey,
     eventType: "proof_status",
-    payloadHash: makePayloadHash(payload),
+    payloadHash: makePayloadHash(receiptPayload),
   });
   if (!receipt.accepted) return "duplicate";
 
   try {
-    await dependencies.sendNotice(payload);
+    await dependencies.sendNotice(resolved.payload);
     await dependencies.finishReceipt(deliveryKey, "processed");
     return "processed";
   } catch (error) {

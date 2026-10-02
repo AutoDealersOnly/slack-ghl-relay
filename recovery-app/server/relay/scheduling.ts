@@ -65,8 +65,10 @@ export const calculateMailpieceJobRunAt = (now = new Date()): Date => {
  * The scheduled callback receives no campaign ID; it derives the job solely
  * from its authenticated platform task identity.
  */
-export async function enqueueCampaignMailpieceImageJob(campaign: { id: number; channelName: string }): Promise<"scheduled" | "already_queued" | "already_completed"> {
-  const claim = await claimMailpieceImageJobForScheduling(campaign.id);
+export async function enqueueCampaignMailpieceImageJob(
+  campaign: { id: number; channelName: string; requeueCompleted?: boolean }
+): Promise<"scheduled" | "already_queued" | "already_completed"> {
+  const claim = await claimMailpieceImageJobForScheduling(campaign.id, { requeueCompleted: campaign.requeueCompleted });
   if (!claim.shouldSchedule) {
     const outcome = claim.job.status === "completed" ? "already_completed" : "already_queued";
     await logRelayAction({
@@ -100,7 +102,9 @@ export async function enqueueCampaignMailpieceImageJob(campaign: { id: number; c
       campaignId: campaign.id,
       action: "bdc_mailpiece_image_job",
       outcome: "success",
-      detail: "Durable BDC mailpiece image job was scheduled after the Sent-to-Print notice.",
+      detail: campaign.requeueCompleted
+        ? "Durable BDC mailpiece image job was scheduled for a newly accepted Sent-to-Print reprint."
+        : "Durable BDC mailpiece image job was scheduled after the Sent-to-Print notice.",
     });
     return "scheduled";
   } catch (error) {

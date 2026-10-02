@@ -181,7 +181,7 @@ export async function queueSentToPrintMailpieceImages(
   campaign: { id: number; channelName: string },
   enqueue: typeof enqueueCampaignMailpieceImageJob = enqueueCampaignMailpieceImageJob
 ) {
-  return enqueue({ id: campaign.id, channelName: campaign.channelName });
+  return enqueue({ id: campaign.id, channelName: campaign.channelName, requeueCompleted: true });
 }
 
 export async function postProofNoticeThenProcessMailpieceImages(input: {

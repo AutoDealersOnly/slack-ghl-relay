@@ -12,7 +12,7 @@ describe("Sent-to-Print BDC image processing", () => {
     ).resolves.toBe("scheduled");
 
     expect(enqueue).toHaveBeenCalledTimes(1);
-    expect(enqueue).toHaveBeenCalledWith({ id: 42, channelName: "2609-abc-test-ame" });
+    expect(enqueue).toHaveBeenCalledWith({ id: 42, channelName: "2609-abc-test-ame", requeueCompleted: true });
   });
 
   it("posts and logs the original Sent to Print notice before image work", async () => {
