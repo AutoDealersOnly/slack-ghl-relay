@@ -81,6 +81,8 @@ export type DealershipProperties = {
   verified?: string;
   api_key?: string;
   qr_pass_page_url?: string;
+  qr_url?: string;
+  qr_url_2?: string;
 };
 
 export type GhlRelation = {

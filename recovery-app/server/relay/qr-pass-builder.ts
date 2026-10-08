@@ -18,8 +18,15 @@ export type QrPassDealerSummary = {
   ready: boolean;
 };
 
+export type QrPassPage = {
+  id: "qr-page-1" | "qr-page-2";
+  label: "QR Page 1" | "QR Page 2";
+  url: string;
+};
+
 export type QrPassPackage = {
   dealership: QrPassDealerSummary;
+  qrPages: QrPassPage[];
   pinGate: string;
   appointmentPass: string;
   editContact: string;
@@ -48,6 +55,33 @@ function normalizedQrPassUrl(value: string): string {
   const url = value.trim();
   if (!url) return "";
   return /^https?:\/\//i.test(url) ? url : `https://${url.replace(/^\/\//, "")}`;
+}
+
+/**
+ * The QR Mail Builder stores up to two ready-to-use public QR page addresses
+ * on the selected ADO Dealership record. Only well-formed HTTP(S) addresses
+ * are returned; no other Dealership fields leave the server through qrPages.
+ */
+export function buildQrPages(input: { qrUrl?: string | null; qrUrl2?: string | null }): QrPassPage[] {
+  const validatedHttpUrl = (value: string | null | undefined): string | null => {
+    const candidate = text(value);
+    if (!candidate) return null;
+    try {
+      const parsed = new URL(candidate);
+      return parsed.protocol === "https:" || parsed.protocol === "http:" ? candidate : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const candidates: Array<{ id: QrPassPage["id"]; label: QrPassPage["label"]; value: string | null | undefined }> = [
+    { id: "qr-page-1", label: "QR Page 1", value: input.qrUrl },
+    { id: "qr-page-2", label: "QR Page 2", value: input.qrUrl2 },
+  ];
+  return candidates.flatMap(({ id, label, value }) => {
+    const url = validatedHttpUrl(value);
+    return url ? [{ id, label, url }] : [];
+  });
 }
 
 function asJavaScriptLiteral(value: string): string {
@@ -151,5 +185,9 @@ export async function generateQrPassPackage(access: string, dealershipId: string
   if (!apiKey || !locationId || !qrPassUrl) {
     throw new TRPCError({ code: "PRECONDITION_FAILED", message: "This dealership is missing its API key, location ID, or QR Pass Page URL." });
   }
-  return { dealership: summary(record), ...createQrPassOutputs({ apiKey, locationId, qrPassUrl }) };
+  return {
+    dealership: summary(record),
+    qrPages: buildQrPages({ qrUrl: property(record, "qr_url"), qrUrl2: property(record, "qr_url_2") }),
+    ...createQrPassOutputs({ apiKey, locationId, qrPassUrl }),
+  };
 }
