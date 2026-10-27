@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNotNull, lt, ne } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, ne, or } from "drizzle-orm";
 import {
   relayActionLogs,
   relayActivityDashboardRefreshJobs,
@@ -6,6 +6,7 @@ import {
   relayArchiveReconciliationJobs,
   relayCampaignActivityEvents,
   relayCampaigns,
+  relayMailpieceImageBackstopJobs,
   relayMailpieceImageJobs,
   relayMailpieceImageUploads,
   relayOfficeAtHandActiveCalls,
@@ -416,6 +417,54 @@ export async function recordActivityDashboardRefreshRun(taskUid: string, summary
     .where(eq(relayActivityDashboardRefreshJobs.taskUid, taskUid));
 }
 
+export const MAILPIECE_IMAGE_BACKSTOP_JOB_KEY = "mailpiece_image_backstop";
+export const MAILPIECE_IMAGE_BACKSTOP_TEST_CHANNEL = "2609-abc-test-ame";
+
+/** The backstop registration is separate from an individual campaign's one-time image job. */
+export async function getMailpieceImageBackstopJob() {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(relayMailpieceImageBackstopJobs)
+    .where(eq(relayMailpieceImageBackstopJobs.jobKey, MAILPIECE_IMAGE_BACKSTOP_JOB_KEY)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function getMailpieceImageBackstopJobByTaskUid(taskUid: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(relayMailpieceImageBackstopJobs)
+    .where(and(
+      eq(relayMailpieceImageBackstopJobs.jobKey, MAILPIECE_IMAGE_BACKSTOP_JOB_KEY),
+      eq(relayMailpieceImageBackstopJobs.taskUid, taskUid)
+    )).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function saveMailpieceImageBackstopJob(input: { taskUid: string; cronExpression: string; isEnabled?: boolean }) {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  await db.insert(relayMailpieceImageBackstopJobs).values({
+    jobKey: MAILPIECE_IMAGE_BACKSTOP_JOB_KEY,
+    taskUid: input.taskUid,
+    cronExpression: input.cronExpression,
+    isEnabled: input.isEnabled ?? true,
+  }).onDuplicateKeyUpdate({
+    set: { taskUid: input.taskUid, cronExpression: input.cronExpression, isEnabled: input.isEnabled ?? true },
+  });
+  return getMailpieceImageBackstopJob();
+}
+
+export async function recordMailpieceImageBackstopRun(taskUid: string, summary: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  await db.update(relayMailpieceImageBackstopJobs)
+    .set({ lastRunAt: new Date(), lastSummary: summary.slice(0, 4000) })
+    .where(and(
+      eq(relayMailpieceImageBackstopJobs.jobKey, MAILPIECE_IMAGE_BACKSTOP_JOB_KEY),
+      eq(relayMailpieceImageBackstopJobs.taskUid, taskUid)
+    ));
+}
+
 /** Returns the one active private Super Admin channel, if setup has completed. */
 export async function getActiveSuperAdminChannel() {
   const db = await getDb();
@@ -810,7 +859,9 @@ export async function finishMailpieceImageUpload(input: {
 }
 
 export type MailpieceImageJobStatus = "pending" | "scheduling" | "scheduled" | "processing" | "completed" | "failed";
-export const MAILPIECE_IMAGE_JOB_STALE_MS = 2 * 60 * 1000;
+/** Long enough for a two-page transfer; refreshed at every worker stage. */
+export const MAILPIECE_IMAGE_JOB_STALE_MS = 10 * 60 * 1000;
+export const MAILPIECE_IMAGE_SCHEDULED_CALLBACK_GRACE_MS = 5 * 60 * 1000;
 
 export type MailpieceImageJobScheduleClaim = {
   job: typeof relayMailpieceImageJobs.$inferSelect;
@@ -842,6 +893,81 @@ export function isMailpieceImageJobSchedulingEligible(input: {
   if (input.status === "pending" || input.status === "failed") return true;
   if (input.status !== "processing") return false;
   return input.updatedAt.getTime() < (input.now ?? new Date()).getTime() - MAILPIECE_IMAGE_JOB_STALE_MS;
+}
+
+export type MailpieceImageBackstopCandidate = {
+  jobId: number;
+  campaignId: number;
+  channelName: string;
+  status: MailpieceImageJobStatus;
+  taskUid: string | null;
+  scheduledFor: Date | null;
+  updatedAt: Date;
+};
+
+/**
+ * The periodic worker is a recovery path, not a normal scheduler. During the
+ * ABC-only rollout it cannot select any live campaign, even if a caller tries
+ * to pass one through a request body.
+ */
+export function shouldRecoverMailpieceImageJobWithBackstop(
+  candidate: Omit<MailpieceImageBackstopCandidate, "jobId" | "campaignId" | "taskUid">,
+  now = new Date()
+): boolean {
+  if (candidate.channelName.trim().toLowerCase() !== MAILPIECE_IMAGE_BACKSTOP_TEST_CHANNEL) return false;
+  if (candidate.status === "completed" || candidate.status === "pending") return false;
+  if (candidate.status === "failed") return true;
+  if (candidate.status === "scheduled") {
+    return Boolean(candidate.scheduledFor && candidate.scheduledFor.getTime() < now.getTime() - MAILPIECE_IMAGE_SCHEDULED_CALLBACK_GRACE_MS);
+  }
+  return candidate.updatedAt.getTime() < now.getTime() - MAILPIECE_IMAGE_JOB_STALE_MS;
+}
+
+/** Lists only ABC Test's previously-created, overdue durable jobs for the controlled backstop trial. */
+export async function listMailpieceImageBackstopCandidates(now = new Date()): Promise<MailpieceImageBackstopCandidate[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({
+    jobId: relayMailpieceImageJobs.id,
+    campaignId: relayMailpieceImageJobs.campaignId,
+    channelName: relayCampaigns.channelName,
+    status: relayMailpieceImageJobs.status,
+    taskUid: relayMailpieceImageJobs.taskUid,
+    scheduledFor: relayMailpieceImageJobs.scheduledFor,
+    updatedAt: relayMailpieceImageJobs.updatedAt,
+  }).from(relayMailpieceImageJobs)
+    .innerJoin(relayCampaigns, eq(relayCampaigns.id, relayMailpieceImageJobs.campaignId))
+    .where(and(
+      eq(relayCampaigns.channelName, MAILPIECE_IMAGE_BACKSTOP_TEST_CHANNEL),
+      inArray(relayMailpieceImageJobs.status, ["scheduled", "scheduling", "processing", "failed"])
+    ));
+  return rows.filter(row => shouldRecoverMailpieceImageJobWithBackstop(row, now));
+}
+
+/**
+ * Establishes the recovery fence before an obsolete task is deleted or a new
+ * one-time task is created. Once this returns true, an old task UID cannot
+ * complete or fail the recovered row.
+ */
+export async function claimMailpieceImageJobForBackstopRecovery(input: {
+  candidate: MailpieceImageBackstopCandidate;
+  now?: Date;
+}): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Relay database is unavailable");
+  const now = input.now ?? new Date();
+  if (!shouldRecoverMailpieceImageJobWithBackstop(input.candidate, now)) return false;
+  const callbackOverdueBefore = new Date(now.getTime() - MAILPIECE_IMAGE_SCHEDULED_CALLBACK_GRACE_MS);
+  const staleBefore = new Date(now.getTime() - MAILPIECE_IMAGE_JOB_STALE_MS);
+  const condition = or(
+    eq(relayMailpieceImageJobs.status, "failed"),
+    and(eq(relayMailpieceImageJobs.status, "scheduled"), lt(relayMailpieceImageJobs.scheduledFor, callbackOverdueBefore)),
+    and(inArray(relayMailpieceImageJobs.status, ["scheduling", "processing"]), lt(relayMailpieceImageJobs.updatedAt, staleBefore))
+  );
+  const result = await db.update(relayMailpieceImageJobs)
+    .set({ status: "scheduling", taskUid: null, scheduledFor: null, startedAt: null, finishedAt: null, lastError: null })
+    .where(and(eq(relayMailpieceImageJobs.id, input.candidate.jobId), condition));
+  return getDatabaseAffectedRows(result) === 1;
 }
 
 /**
@@ -906,7 +1032,11 @@ export async function attachMailpieceImageJobTask(input: { jobId: number; taskUi
   const result = await db
     .update(relayMailpieceImageJobs)
     .set({ status: "scheduled", taskUid: input.taskUid, scheduledFor: input.scheduledFor })
-    .where(and(eq(relayMailpieceImageJobs.id, input.jobId), eq(relayMailpieceImageJobs.status, "scheduling")));
+    .where(and(
+      eq(relayMailpieceImageJobs.id, input.jobId),
+      eq(relayMailpieceImageJobs.status, "scheduling"),
+      isNull(relayMailpieceImageJobs.taskUid)
+    ));
   return getDatabaseAffectedRows(result) === 1;
 }
 
@@ -916,7 +1046,7 @@ export async function failMailpieceImageJobScheduling(input: { jobId: number; de
   await db
     .update(relayMailpieceImageJobs)
     .set({ status: "failed", finishedAt: new Date(), lastError: input.detail.slice(0, 500) })
-    .where(eq(relayMailpieceImageJobs.id, input.jobId));
+    .where(and(eq(relayMailpieceImageJobs.id, input.jobId), eq(relayMailpieceImageJobs.status, "scheduling")));
 }
 
 export async function getMailpieceImageJobByTaskUid(taskUid: string) {
@@ -967,7 +1097,7 @@ export async function completeMailpieceImageJob(input: { taskUid: string }) {
   await db
     .update(relayMailpieceImageJobs)
     .set({ status: "completed", finishedAt: new Date(), lastError: null })
-    .where(eq(relayMailpieceImageJobs.taskUid, input.taskUid));
+    .where(and(eq(relayMailpieceImageJobs.taskUid, input.taskUid), eq(relayMailpieceImageJobs.status, "processing")));
 }
 
 export async function failMailpieceImageJobRun(input: { taskUid: string; detail: string }) {
@@ -976,5 +1106,14 @@ export async function failMailpieceImageJobRun(input: { taskUid: string; detail:
   await db
     .update(relayMailpieceImageJobs)
     .set({ status: "failed", finishedAt: new Date(), lastError: input.detail.slice(0, 500) })
-    .where(eq(relayMailpieceImageJobs.taskUid, input.taskUid));
+    .where(and(eq(relayMailpieceImageJobs.taskUid, input.taskUid), eq(relayMailpieceImageJobs.status, "processing")));
+}
+
+/** Extends the active worker lease at every safe progress point. */
+export async function touchMailpieceImageJobRun(taskUid: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(relayMailpieceImageJobs)
+    .set({ updatedAt: new Date() })
+    .where(and(eq(relayMailpieceImageJobs.taskUid, taskUid), eq(relayMailpieceImageJobs.status, "processing")));
 }

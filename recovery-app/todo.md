@@ -208,6 +208,7 @@
 - [x] Build the separate PDF-to-JPEG dealership Media Storage automation from the same proven Slack PDF selection component.
 - [x] Retire the unfinished Automated Proof Links path and leave the existing Production Proof field unchanged, while preserving the named known-good Sent-to-Print message rollback baseline.
 - [x] Select only non-ENV PDF files from the exact linked campaign channel; retain the newest version for each repeated filename and ignore every PDF whose filename contains `ENV`.
+- [x] Restore the established BDC image selection rule: campaign channels retain historical PDFs, but the image action uses only the newest non-ENV PDF in the exact linked channel. Verify the small correction on the affected Toyota Tampa campaign without changing its Proof Stage or posting another Sent to Print notice.
 - [x] Convert selected PDF pages to JPEGs and upload them to the associated dealership subaccount’s Media folder using only that Dealership record’s protected location ID and API key.
 - [x] Update `current_mailpiece_image` and `current_mailpiece_image_back` in the associated dealership subaccount’s Campaign Details with the approved one- or two-mailpiece image mapping.
 - [x] Post the exact successful completion message in the linked campaign channel: `BDC Mailpiece images have been uploaded to the *subaccount name* media folder and the custom values have been updated.`

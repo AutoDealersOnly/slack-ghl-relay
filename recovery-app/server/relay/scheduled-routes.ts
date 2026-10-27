@@ -11,10 +11,13 @@ import {
   getActivityDashboardRefreshJobByTaskUid,
   getCampaignByScheduledTask,
   isCampaignAutoarchiveEnabled,
+  getMailpieceImageBackstopJobByTaskUid,
   getMailpieceImageJobByTaskUid,
   logRelayAction,
   recordArchiveReconciliationRun,
   recordActivityDashboardRefreshRun,
+  recordMailpieceImageBackstopRun,
+  touchMailpieceImageJobRun,
   updateCampaignArchive,
 } from "./db";
 import { reconcileActiveCampaignArchiveRegistrations } from "./archive-reconciliation";
@@ -25,7 +28,7 @@ import { uploadCampaignMailpieceImages } from "./mailpiece-images";
 import { fetchProductionRecord } from "./ghl";
 import { markSuperAdminArchiveCompleted } from "./super-admin";
 import { refreshOpenActivityDashboards } from "./activity-dashboard";
-import { isEasternWeekend } from "./scheduling";
+import { isEasternWeekend, recoverOverdueMailpieceImageJobs } from "./scheduling";
 
 const scheduledRelayRouter = Router();
 export const ARCHIVE_WARNING_MESSAGE = "This channel is scheduled to archive tomorrow. Contact admin if the campaign needs to remain open.";
@@ -192,6 +195,39 @@ scheduledRelayRouter.post("/activity-dashboard-refresh", async (req: Request, re
 });
 
 /**
+ * A guarded recovery-only path for a missed one-time image callback. This
+ * initial release is explicitly ABC Test-only inside the database selector and
+ * ignores all request-body values.
+ */
+scheduledRelayRouter.post("/mailpiece-image-backstop", async (req: Request, res: Response) => {
+  try {
+    const user = await authenticateCron(req, res);
+    if (!user) return;
+    const job = await getMailpieceImageBackstopJobByTaskUid(user.taskUid!);
+    if (!job || !job.isEnabled) {
+      res.json({ ok: true, skipped: "unknown_or_disabled_mailpiece_backstop" });
+      return;
+    }
+    const summary = await recoverOverdueMailpieceImageJobs();
+    await recordMailpieceImageBackstopRun(user.taskUid!, JSON.stringify(summary));
+    await logRelayAction({
+      action: "bdc_mailpiece_image_backstop",
+      outcome: summary.failed > 0 ? "failed" : "success",
+      detail: `ABC Test-only backstop reviewed ${summary.reviewed}; rescheduled ${summary.rescheduled}; skipped ${summary.skipped}; failed ${summary.failed}.`,
+    });
+    if (summary.failed > 0) {
+      res.status(500).json({ error: "mailpiece image backstop had failures", summary, timestamp: new Date().toISOString() });
+      return;
+    }
+    res.json({ ok: true, summary });
+  } catch (error) {
+    const detail = redactErrorDetail(error);
+    await logRelayAction({ action: "bdc_mailpiece_image_backstop", outcome: "failed", detail }).catch(() => undefined);
+    res.status(500).json({ error: "mailpiece image backstop failed", detail, timestamp: new Date().toISOString() });
+  }
+});
+
+/**
  * Runs only when invoked by the platform-managed one-time job. The body is
  * deliberately ignored: task ownership is derived exclusively from `taskUid`.
  */
@@ -242,14 +278,16 @@ scheduledRelayRouter.post("/mailpiece-images", async (req: Request, res: Respons
     await uploadCampaignMailpieceImages({
       campaign,
       production,
-      onStage: stage =>
-        logRelayAction({
+      onStage: async stage => {
+        await touchMailpieceImageJobRun(taskUid!);
+        await logRelayAction({
           campaignId: campaign.id,
           action: "bdc_mailpiece_image_stage",
           outcome: "success",
           detail: `Scheduled BDC mailpiece job reached stage: ${stage}.`,
           attemptCount: claim.job!.attemptCount,
-        }),
+        });
+      },
     });
     await completeMailpieceImageJob({ taskUid });
     await deleteHeartbeatJob(taskUid, "").catch(() => undefined);

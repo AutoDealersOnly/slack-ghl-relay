@@ -2,17 +2,22 @@ import { createHeartbeatJob, deleteHeartbeatJob, updateHeartbeatJob } from "../_
 import { cancelScheduledCampaignArchive } from "./archive-jobs";
 import {
   attachMailpieceImageJobTask,
+  claimMailpieceImageJobForBackstopRecovery,
   claimMailpieceImageJobForScheduling,
   failMailpieceImageJobScheduling,
   getCampaignByChannelName,
+  getMailpieceImageBackstopJob,
   isCampaignAutoarchiveEnabled,
+  listMailpieceImageBackstopCandidates,
   listPendingCampaignArchives,
   logRelayAction,
+  saveMailpieceImageBackstopJob,
   updateCampaignArchive,
 } from "./db";
 import { redactErrorDetail } from "./security";
 
 const ARCHIVE_TIME_ZONE = "America/New_York";
+export const MAILPIECE_IMAGE_BACKSTOP_CRON = "0 */15 * * * *";
 
 const easternWeekday = (date: Date): string =>
   new Intl.DateTimeFormat("en-US", { timeZone: ARCHIVE_TIME_ZONE, weekday: "short" }).format(date);
@@ -60,6 +65,94 @@ export const calculateMailpieceJobRunAt = (now = new Date()): Date => {
   return runAt;
 };
 
+async function scheduleClaimedMailpieceImageJob(input: {
+  jobId: number;
+  campaignId: number;
+  channelName: string;
+  priorTaskUid: string | null;
+  description: string;
+}): Promise<void> {
+  try {
+    if (input.priorTaskUid) await deleteHeartbeatJob(input.priorTaskUid, "").catch(() => undefined);
+    const runAt = calculateMailpieceJobRunAt();
+    const scheduled = await createHeartbeatJob(
+      {
+        name: `relay-mailpiece-images-${input.jobId}`,
+        cron: buildExactMinuteDateCron(runAt),
+        path: "/api/scheduled/relay/mailpiece-images",
+        method: "POST",
+        description: `Process BDC mailpiece images for #${input.channelName}.`,
+      },
+      ""
+    );
+    const attached = await attachMailpieceImageJobTask({ jobId: input.jobId, taskUid: scheduled.taskUid, scheduledFor: runAt });
+    if (!attached) {
+      await deleteHeartbeatJob(scheduled.taskUid, "").catch(() => undefined);
+      throw new Error("Durable BDC mailpiece image job could not be attached to its scheduling record");
+    }
+    await logRelayAction({
+      campaignId: input.campaignId,
+      action: "bdc_mailpiece_image_job",
+      outcome: "success",
+      detail: input.description,
+    });
+  } catch (error) {
+    const detail = redactErrorDetail(error);
+    await failMailpieceImageJobScheduling({ jobId: input.jobId, detail });
+    await logRelayAction({
+      campaignId: input.campaignId,
+      action: "bdc_mailpiece_image_job",
+      outcome: "failed",
+      detail: `BDC mailpiece image job could not be scheduled: ${detail}`,
+    });
+    throw error;
+  }
+}
+
+/** Creates the one project-level recovery heartbeat. The callback itself remains ABC Test-only. */
+export async function ensureMailpieceImageBackstopSchedule(): Promise<"existing" | "created"> {
+  const existing = await getMailpieceImageBackstopJob();
+  if (existing?.taskUid && existing.isEnabled) return "existing";
+  const scheduled = await createHeartbeatJob({
+    name: "relay-mailpiece-image-backstop",
+    cron: MAILPIECE_IMAGE_BACKSTOP_CRON,
+    path: "/api/scheduled/relay/mailpiece-image-backstop",
+    method: "POST",
+    description: "ABC Test-only recovery check for overdue BDC mailpiece image workers.",
+  }, "");
+  await saveMailpieceImageBackstopJob({ taskUid: scheduled.taskUid, cronExpression: MAILPIECE_IMAGE_BACKSTOP_CRON, isEnabled: true });
+  return "created";
+}
+
+/**
+ * Requeues only ABC Test workers that were already durably created but were
+ * missed by their one-time callback. Completed and fresh jobs are excluded.
+ */
+export async function recoverOverdueMailpieceImageJobs(): Promise<{ reviewed: number; rescheduled: number; skipped: number; failed: number }> {
+  const candidates = await listMailpieceImageBackstopCandidates();
+  const summary = { reviewed: candidates.length, rescheduled: 0, skipped: 0, failed: 0 };
+  for (const candidate of candidates) {
+    const claimed = await claimMailpieceImageJobForBackstopRecovery({ candidate });
+    if (!claimed) {
+      summary.skipped += 1;
+      continue;
+    }
+    try {
+      await scheduleClaimedMailpieceImageJob({
+        jobId: candidate.jobId,
+        campaignId: candidate.campaignId,
+        channelName: candidate.channelName,
+        priorTaskUid: candidate.taskUid,
+        description: "ABC Test-only backstop rescheduled an overdue BDC mailpiece image job.",
+      });
+      summary.rescheduled += 1;
+    } catch {
+      summary.failed += 1;
+    }
+  }
+  return summary;
+}
+
 /**
  * Queues the long-running BDC work separately from the GoHighLevel webhook.
  * The scheduled callback receives no campaign ID; it derives the job solely
@@ -80,44 +173,24 @@ export async function enqueueCampaignMailpieceImageJob(
     return outcome;
   }
 
-  try {
-    if (claim.priorTaskUid) await deleteHeartbeatJob(claim.priorTaskUid, "").catch(() => undefined);
-    const runAt = calculateMailpieceJobRunAt();
-    const scheduled = await createHeartbeatJob(
-      {
-        name: `relay-mailpiece-images-${claim.job.id}`,
-        cron: buildExactMinuteDateCron(runAt),
-        path: "/api/scheduled/relay/mailpiece-images",
-        method: "POST",
-        description: `Process BDC mailpiece images for #${campaign.channelName}.`,
-      },
-      ""
-    );
-    const attached = await attachMailpieceImageJobTask({ jobId: claim.job.id, taskUid: scheduled.taskUid, scheduledFor: runAt });
-    if (!attached) {
-      await deleteHeartbeatJob(scheduled.taskUid, "").catch(() => undefined);
-      throw new Error("Durable BDC mailpiece image job could not be attached to its scheduling record");
-    }
-    await logRelayAction({
+  await scheduleClaimedMailpieceImageJob({
+    jobId: claim.job.id,
+    campaignId: campaign.id,
+    channelName: campaign.channelName,
+    priorTaskUid: claim.priorTaskUid,
+    description: campaign.requeueCompleted
+      ? "Durable BDC mailpiece image job was scheduled for a newly accepted Sent-to-Print reprint."
+      : "Durable BDC mailpiece image job was scheduled after the Sent-to-Print notice.",
+  });
+  await ensureMailpieceImageBackstopSchedule().catch(error =>
+    logRelayAction({
       campaignId: campaign.id,
-      action: "bdc_mailpiece_image_job",
-      outcome: "success",
-      detail: campaign.requeueCompleted
-        ? "Durable BDC mailpiece image job was scheduled for a newly accepted Sent-to-Print reprint."
-        : "Durable BDC mailpiece image job was scheduled after the Sent-to-Print notice.",
-    });
-    return "scheduled";
-  } catch (error) {
-    const detail = redactErrorDetail(error);
-    await failMailpieceImageJobScheduling({ jobId: claim.job.id, detail });
-    await logRelayAction({
-      campaignId: campaign.id,
-      action: "bdc_mailpiece_image_job",
+      action: "bdc_mailpiece_image_backstop",
       outcome: "failed",
-      detail: `BDC mailpiece image job could not be scheduled: ${detail}`,
-    });
-    throw error;
-  }
+      detail: `ABC-only mailpiece backstop registration could not be confirmed: ${redactErrorDetail(error)}`,
+    })
+  );
+  return "scheduled";
 }
 
 export const shouldRescheduleArchive = (

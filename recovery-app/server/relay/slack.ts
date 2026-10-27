@@ -405,12 +405,17 @@ export function selectCurrentChannelPdfs(channelId: string, files: SlackChannelF
   return Array.from(newestByName.values()).sort((left, right) => (left.created ?? 0) - (right.created ?? 0));
 }
 
-/** Selects only mailpiece PDFs. Envelope PDFs are intentionally excluded by filename. */
+/**
+ * Selects the newest non-envelope PDF from the exact campaign channel.
+ * Campaign channels intentionally retain earlier print files; BDC images must
+ * represent the most recently posted print version, not every historical PDF.
+ */
 export function selectCurrentChannelMailpiecePdfs(channelId: string, files: SlackChannelFile[]): SlackChannelFile[] {
-  return selectCurrentChannelPdfs(
+  const current = selectCurrentChannelPdfs(
     channelId,
     files.filter(file => !file.name.toLowerCase().includes("env"))
   );
+  return current.length > 0 ? [current[current.length - 1]] : [];
 }
 
 async function listChannelFiles(channelId: string): Promise<SlackChannelFile[]> {
@@ -439,7 +444,7 @@ export async function getCurrentChannelPdfs(channelId: string): Promise<SlackCha
   return selectCurrentChannelPdfs(channelId, await listChannelFiles(channelId));
 }
 
-/** Lists qualifying non-envelope PDFs from one exact campaign channel, keeping only newest duplicate filenames. */
+/** Lists the newest qualifying non-envelope PDF from one exact campaign channel. */
 export async function getCurrentChannelMailpiecePdfs(channelId: string): Promise<SlackChannelFile[]> {
   return selectCurrentChannelMailpiecePdfs(channelId, await listChannelFiles(channelId));
 }

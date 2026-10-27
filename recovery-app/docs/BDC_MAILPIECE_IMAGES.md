@@ -19,14 +19,13 @@ Protected connection values, Slack group references, location identifiers, and A
 
 ## Mailpiece selection and mapping
 
-The relay looks only in the **exact linked campaign Slack channel**. It selects PDFs only, excludes a filename containing `ENV` without regard to case, and keeps the newest version when the same filename was uploaded more than once.
+The relay looks only in the **exact linked campaign Slack channel**. Campaign channels intentionally keep earlier PDFs. It therefore selects **one PDF only**: the newest non-envelope PDF in that channel. A filename containing `ENV` is excluded without regard to case. Older non-envelope PDFs are history and are not considered for the current BDC image update.
 
 | Qualifying PDF set | `current_mailpiece_image` | `current_mailpiece_image_back` |
 |---|---|---|
 | One PDF with one page | Page 1 | Explicitly set empty |
 | One PDF with two or more pages | Page 1 | Page 2 |
-| Two PDFs | First page of the first selected PDF | First page of the second selected PDF |
-| More than two distinct PDFs | No values are changed | No values are changed |
+| Multiple historical PDFs | Page 1 of the newest non-envelope PDF | Page 2 of that same newest PDF, if it has a second page |
 
 The relay uploads JPEGs to the linked dealership’s Media library. For a one-page mailpiece, the single front image and an intentionally empty back value are the complete result. For every other accepted mapping, it updates both values only after both required images are available. On full success, it posts:
 

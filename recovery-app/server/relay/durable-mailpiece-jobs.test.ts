@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { getDatabaseAffectedRows, isDuplicateDatabaseEntryError, isMailpieceImageJobRunEligible, isMailpieceImageJobSchedulingEligible } from "./db";
+import {
+  getDatabaseAffectedRows,
+  isDuplicateDatabaseEntryError,
+  isMailpieceImageJobRunEligible,
+  isMailpieceImageJobSchedulingEligible,
+  shouldRecoverMailpieceImageJobWithBackstop,
+} from "./db";
 import { isAuthenticatedCronTask } from "./scheduled-routes";
 import { postProofNoticeThenProcessMailpieceImages, queueSentToPrintMailpieceImages } from "./workflows";
 
@@ -79,7 +85,7 @@ describe("Sent-to-Print BDC image processing", () => {
     expect(isMailpieceImageJobRunEligible({ status: "scheduled", updatedAt: now, now })).toBe(true);
     expect(isMailpieceImageJobRunEligible({ status: "failed", updatedAt: now, now })).toBe(true);
     expect(isMailpieceImageJobRunEligible({ status: "processing", updatedAt: new Date("2026-09-11T14:18:00.000Z"), now })).toBe(false);
-    expect(isMailpieceImageJobRunEligible({ status: "processing", updatedAt: new Date("2026-09-11T14:14:59.000Z"), now })).toBe(true);
+    expect(isMailpieceImageJobRunEligible({ status: "processing", updatedAt: new Date("2026-09-11T14:09:59.000Z"), now })).toBe(true);
     expect(isMailpieceImageJobRunEligible({ status: "completed", updatedAt: now, now })).toBe(false);
   });
 
@@ -87,8 +93,21 @@ describe("Sent-to-Print BDC image processing", () => {
     const now = new Date("2026-09-11T14:20:00.000Z");
     expect(isMailpieceImageJobSchedulingEligible({ status: "failed", updatedAt: now, now })).toBe(true);
     expect(isMailpieceImageJobSchedulingEligible({ status: "processing", updatedAt: new Date("2026-09-11T14:19:00.000Z"), now })).toBe(false);
-    expect(isMailpieceImageJobSchedulingEligible({ status: "processing", updatedAt: new Date("2026-09-11T14:17:59.000Z"), now })).toBe(true);
+    expect(isMailpieceImageJobSchedulingEligible({ status: "processing", updatedAt: new Date("2026-09-11T14:09:59.000Z"), now })).toBe(true);
     expect(isMailpieceImageJobSchedulingEligible({ status: "scheduled", updatedAt: now, now })).toBe(false);
+  });
+
+  it("uses the backstop only for an overdue ABC Test job and never a completed or live campaign", () => {
+    const now = new Date("2026-10-20T18:20:00.000Z");
+    const base = { channelName: "2609-abc-test-ame", updatedAt: new Date("2026-10-20T18:00:00.000Z") };
+
+    expect(shouldRecoverMailpieceImageJobWithBackstop({ ...base, status: "scheduled", scheduledFor: new Date("2026-10-20T18:14:59.000Z") }, now)).toBe(true);
+    expect(shouldRecoverMailpieceImageJobWithBackstop({ ...base, status: "scheduled", scheduledFor: new Date("2026-10-20T18:15:00.000Z") }, now)).toBe(false);
+    expect(shouldRecoverMailpieceImageJobWithBackstop({ ...base, status: "failed", scheduledFor: null }, now)).toBe(true);
+    expect(shouldRecoverMailpieceImageJobWithBackstop({ ...base, status: "processing", scheduledFor: null }, now)).toBe(true);
+    expect(shouldRecoverMailpieceImageJobWithBackstop({ ...base, status: "completed", scheduledFor: null }, now)).toBe(false);
+    expect(shouldRecoverMailpieceImageJobWithBackstop({ ...base, status: "pending", scheduledFor: null }, now)).toBe(false);
+    expect(shouldRecoverMailpieceImageJobWithBackstop({ ...base, channelName: "2610-live-dealer-ame", status: "failed", scheduledFor: null }, now)).toBe(false);
   });
 
   it("rejects non-scheduled callers and requires a trusted task identity", () => {

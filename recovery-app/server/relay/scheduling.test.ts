@@ -5,12 +5,17 @@ import {
   calculateArchiveWarningDate,
   isCampaignAutoarchivePaused,
   isEasternWeekend,
+  MAILPIECE_IMAGE_BACKSTOP_CRON,
   moveToNextEasternBusinessDay,
   shouldReconcileArchiveSchedule,
   shouldRescheduleArchive,
 } from "./scheduling";
 
 describe("relay archive timing", () => {
+  it("uses a platform-safe fifteen-minute schedule for the ABC-only mailpiece recovery backstop", () => {
+    expect(MAILPIECE_IMAGE_BACKSTOP_CRON).toBe("0 */15 * * * *");
+  });
+
   it("schedules an archive three days after a valid campaign end date", () => {
     const archiveDate = calculateArchiveDate("2026-08-30");
     expect(archiveDate?.toISOString()).toBe("2026-09-02T12:00:00.000Z");

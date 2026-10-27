@@ -287,6 +287,26 @@ export const relayMailpieceImageJobs = mysqlTable(
   })
 );
 
+/** One project-level backstop registration for overdue durable mailpiece image jobs. */
+export const relayMailpieceImageBackstopJobs = mysqlTable(
+  "relay_mailpiece_image_backstop_jobs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    jobKey: varchar("jobKey", { length: 96 }).notNull(),
+    taskUid: varchar("taskUid", { length: 65 }),
+    cronExpression: varchar("cronExpression", { length: 64 }).notNull(),
+    isEnabled: boolean("isEnabled").default(true).notNull(),
+    lastRunAt: timestamp("lastRunAt"),
+    lastSummary: text("lastSummary"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    jobKeyUnique: uniqueIndex("relay_mailpiece_image_backstop_jobs_job_key_unique").on(table.jobKey),
+    taskUidIndex: index("relay_mailpiece_image_backstop_jobs_task_uid_idx").on(table.taskUid),
+  })
+);
+
 /** Encrypted refresh credential for the separate private OfficeAtHand active-call test app. */
 export const relayOfficeAtHandAuthorizations = mysqlTable(
   "relay_office_at_hand_authorizations",
@@ -354,6 +374,7 @@ export type RelayArchiveReconciliationJob = typeof relayArchiveReconciliationJob
 export type RelayProofPdfAttachment = typeof relayProofPdfAttachments.$inferSelect;
 export type RelayMailpieceImageUpload = typeof relayMailpieceImageUploads.$inferSelect;
 export type RelayMailpieceImageJob = typeof relayMailpieceImageJobs.$inferSelect;
+export type RelayMailpieceImageBackstopJob = typeof relayMailpieceImageBackstopJobs.$inferSelect;
 export type RelayOfficeAtHandAuthorization = typeof relayOfficeAtHandAuthorizations.$inferSelect;
 export type RelayOfficeAtHandActiveCall = typeof relayOfficeAtHandActiveCalls.$inferSelect;
 export type RelayOfficeAtHandTestSubscription = typeof relayOfficeAtHandTestSubscriptions.$inferSelect;

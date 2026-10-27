@@ -13,14 +13,14 @@ const slackFile = (id: string, name: string, created: number) => ({
 });
 
 describe("BDC mailpiece image planning", () => {
-  it("ignores ENV PDFs and keeps only the newest duplicate filename", () => {
+  it("ignores ENV PDFs and uses only the newest non-envelope PDF in a campaign channel", () => {
     const files = selectCurrentChannelMailpiecePdfs(channelId, [
       slackFile("F_ENV", "offer-env.pdf", 30),
       slackFile("F_OLD", "mailer.pdf", 10),
       slackFile("F_NEW", "Mailer.PDF", 20),
-      slackFile("F_TWO", "second-piece.pdf", 15),
+      slackFile("F_LATEST", "newest-print.pdf", 25),
     ]);
-    expect(files.map(file => file.id)).toEqual(["F_TWO", "F_NEW"]);
+    expect(files.map(file => file.id)).toEqual(["F_LATEST"]);
   });
 
   it("maps the first two pages of one mailpiece to front and back", () => {
@@ -40,19 +40,6 @@ describe("BDC mailpiece image planning", () => {
   it("does not clear the back value for a mailpiece that should have a second image", () => {
     expect(() => buildBdcMailpieceImageCustomValues({ front: "https://media.example/front.jpg" }, false))
       .toThrow("Both required mailpiece images are not available");
-  });
-
-  it("maps the first page of each two-mailpiece PDF to front and back", () => {
-    expect(buildMailpieceImagePlan([slackFile("F_ONE", "mailer-a.pdf", 10), slackFile("F_TWO", "mailer-b.pdf", 20)])).toMatchObject([
-      { pageNumber: 1, slot: "front" },
-      { pageNumber: 1, slot: "back" },
-    ]);
-  });
-
-  it("refuses to guess when more than two distinct non-ENV PDFs exist", () => {
-    expect(() => buildMailpieceImagePlan([
-      slackFile("F_ONE", "a.pdf", 10), slackFile("F_TWO", "b.pdf", 20), slackFile("F_THREE", "c.pdf", 30),
-    ])).toThrow("More than two distinct non-ENV PDFs");
   });
 
   it("uses the approved campaign-channel confirmation wording", () => {
