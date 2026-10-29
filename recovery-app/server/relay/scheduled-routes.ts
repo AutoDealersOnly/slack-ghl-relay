@@ -195,9 +195,9 @@ scheduledRelayRouter.post("/activity-dashboard-refresh", async (req: Request, re
 });
 
 /**
- * A guarded recovery-only path for a missed one-time image callback. This
- * initial release is explicitly ABC Test-only inside the database selector and
- * ignores all request-body values.
+ * A guarded recovery-only path for a missed one-time image callback. The
+ * database selector accepts only recent jobs that never started and ignores
+ * all request-body values.
  */
 scheduledRelayRouter.post("/mailpiece-image-backstop", async (req: Request, res: Response) => {
   try {
@@ -213,7 +213,7 @@ scheduledRelayRouter.post("/mailpiece-image-backstop", async (req: Request, res:
     await logRelayAction({
       action: "bdc_mailpiece_image_backstop",
       outcome: summary.failed > 0 ? "failed" : "success",
-      detail: `ABC Test-only backstop reviewed ${summary.reviewed}; rescheduled ${summary.rescheduled}; skipped ${summary.skipped}; failed ${summary.failed}.`,
+      detail: `Missed-worker backstop reviewed ${summary.reviewed}; rescheduled ${summary.rescheduled}; skipped ${summary.skipped}; failed ${summary.failed}.`,
     });
     if (summary.failed > 0) {
       res.status(500).json({ error: "mailpiece image backstop had failures", summary, timestamp: new Date().toISOString() });

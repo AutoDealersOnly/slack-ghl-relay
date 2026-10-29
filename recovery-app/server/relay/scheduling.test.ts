@@ -3,15 +3,25 @@ import {
   buildExactDateCron,
   calculateArchiveDate,
   calculateArchiveWarningDate,
+  calculateMailpieceJobRunAt,
   isCampaignAutoarchivePaused,
   isEasternWeekend,
   MAILPIECE_IMAGE_BACKSTOP_CRON,
+  MAILPIECE_IMAGE_MINIMUM_LEAD_MS,
   moveToNextEasternBusinessDay,
   shouldReconcileArchiveSchedule,
   shouldRescheduleArchive,
 } from "./scheduling";
 
 describe("relay archive timing", () => {
+  it("gives each one-time mailpiece worker at least five full minutes to register before it can fire", () => {
+    const now = new Date("2026-10-29T13:42:38.000Z");
+    const scheduled = calculateMailpieceJobRunAt(now);
+    expect(MAILPIECE_IMAGE_MINIMUM_LEAD_MS).toBe(5 * 60 * 1000);
+    expect(scheduled.toISOString()).toBe("2026-10-29T13:48:00.000Z");
+    expect(scheduled.getTime() - now.getTime()).toBeGreaterThanOrEqual(MAILPIECE_IMAGE_MINIMUM_LEAD_MS);
+  });
+
   it("uses a platform-safe fifteen-minute schedule for the ABC-only mailpiece recovery backstop", () => {
     expect(MAILPIECE_IMAGE_BACKSTOP_CRON).toBe("0 */15 * * * *");
   });

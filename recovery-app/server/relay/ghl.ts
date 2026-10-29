@@ -231,30 +231,47 @@ export async function uploadDealershipMediaImage(input: {
   apiKey: string;
   fileName: string;
   bytes: Uint8Array;
-}): Promise<string> {
+}, options: { fetchImpl?: typeof fetch; retryDelayMs?: number } = {}): Promise<string> {
   if (input.bytes.byteLength > 20 * 1024 * 1024) throw new Error("Rendered mailpiece JPEG exceeds the 20 MB media upload limit");
   const fileBuffer = input.bytes.buffer.slice(input.bytes.byteOffset, input.bytes.byteOffset + input.bytes.byteLength) as ArrayBuffer;
-  const form = new FormData();
-  form.append("file", new Blob([fileBuffer], { type: "image/jpeg" }), input.fileName);
-  form.append("hosted", "false");
-  form.append("name", input.fileName);
-  let response: Response;
-  try {
-    response = await fetch(`${GHL_BASE_URL}/medias/upload-file`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${input.apiKey}`, Version: "v3", LocationId: input.locationId },
-      body: form,
-      signal: AbortSignal.timeout(45_000),
-    });
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "TimeoutError") {
-      throw new Error("GoHighLevel dealership media upload timed out after 45 seconds");
+  const buildForm = () => {
+    const form = new FormData();
+    form.append("file", new Blob([fileBuffer], { type: "image/jpeg" }), input.fileName);
+    form.append("hosted", "false");
+    form.append("name", input.fileName);
+    return form;
+  };
+  const fetchImpl = options.fetchImpl ?? fetch;
+  let response: Response | null = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      response = await fetchImpl(`${GHL_BASE_URL}/medias/upload-file`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${input.apiKey}`, Version: "v3", LocationId: input.locationId },
+        body: buildForm(),
+        signal: AbortSignal.timeout(45_000),
+      });
+      break;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "TimeoutError") {
+        throw new Error("GoHighLevel dealership media upload timed out after 45 seconds");
+      }
+      if (attempt === 0 && isRetryableGhlMediaUploadConnectionError(error)) {
+        await new Promise(resolve => setTimeout(resolve, options.retryDelayMs ?? 1_000));
+        continue;
+      }
+      throw error;
     }
-    throw error;
   }
+  if (!response) throw new Error("GoHighLevel dealership media upload did not return a response");
   const upload = await readGhlWriteResponse<{ url?: string }>(response, "dealership mailpiece JPEG upload");
   if (!upload.url) throw new Error("GoHighLevel media upload returned no image URL");
   return upload.url;
+}
+
+/** Retries only a dropped request before GoHighLevel can return an HTTP response. */
+export function isRetryableGhlMediaUploadConnectionError(error: unknown): boolean {
+  return error instanceof TypeError && /(?:fetch failed|network|socket|connection|econn|und_err)/i.test(error.message);
 }
 
 /** Updates all required campaign image custom values only after confirming every target field exists. */

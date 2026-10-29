@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  buildMailpieceImageJobScheduleReset,
   getDatabaseAffectedRows,
   isDuplicateDatabaseEntryError,
   isMailpieceImageJobRunEligible,
@@ -80,6 +81,17 @@ describe("Sent-to-Print BDC image processing", () => {
     expect(isDuplicateDatabaseEntryError(new Error("network unavailable"))).toBe(false);
   });
 
+  it("clears an old task reference before scheduling a failed image job again", () => {
+    expect(buildMailpieceImageJobScheduleReset()).toEqual({
+      status: "scheduling",
+      taskUid: null,
+      scheduledFor: null,
+      startedAt: null,
+      finishedAt: null,
+      lastError: null,
+    });
+  });
+
   it("allows a retry only after a failed or stale job, never while a fresh job is processing", () => {
     const now = new Date("2026-09-11T14:20:00.000Z");
     expect(isMailpieceImageJobRunEligible({ status: "scheduled", updatedAt: now, now })).toBe(true);
@@ -97,17 +109,32 @@ describe("Sent-to-Print BDC image processing", () => {
     expect(isMailpieceImageJobSchedulingEligible({ status: "scheduled", updatedAt: now, now })).toBe(false);
   });
 
-  it("uses the backstop only for an overdue ABC Test job and never a completed or live campaign", () => {
+  it("recovers only a recent live or ABC worker that never started after its scheduled time", () => {
     const now = new Date("2026-10-20T18:20:00.000Z");
-    const base = { channelName: "2609-abc-test-ame", updatedAt: new Date("2026-10-20T18:00:00.000Z") };
+    const base = {
+      channelName: "2611-live-dealer-ame",
+      updatedAt: new Date("2026-10-20T18:00:00.000Z"),
+    };
 
     expect(shouldRecoverMailpieceImageJobWithBackstop({ ...base, status: "scheduled", scheduledFor: new Date("2026-10-20T18:14:59.000Z") }, now)).toBe(true);
     expect(shouldRecoverMailpieceImageJobWithBackstop({ ...base, status: "scheduled", scheduledFor: new Date("2026-10-20T18:15:00.000Z") }, now)).toBe(false);
-    expect(shouldRecoverMailpieceImageJobWithBackstop({ ...base, status: "failed", scheduledFor: null }, now)).toBe(true);
-    expect(shouldRecoverMailpieceImageJobWithBackstop({ ...base, status: "processing", scheduledFor: null }, now)).toBe(true);
+    expect(shouldRecoverMailpieceImageJobWithBackstop({ ...base, status: "scheduled", scheduledFor: new Date("2026-10-19T18:19:59.000Z") }, now)).toBe(false);
+    expect(shouldRecoverMailpieceImageJobWithBackstop({ ...base, status: "scheduled", scheduledFor: new Date("2026-10-20T18:21:00.000Z") }, now)).toBe(false);
+    expect(shouldRecoverMailpieceImageJobWithBackstop({ ...base, status: "failed", scheduledFor: null }, now)).toBe(false);
+    expect(shouldRecoverMailpieceImageJobWithBackstop({ ...base, status: "processing", scheduledFor: null }, now)).toBe(false);
     expect(shouldRecoverMailpieceImageJobWithBackstop({ ...base, status: "completed", scheduledFor: null }, now)).toBe(false);
     expect(shouldRecoverMailpieceImageJobWithBackstop({ ...base, status: "pending", scheduledFor: null }, now)).toBe(false);
-    expect(shouldRecoverMailpieceImageJobWithBackstop({ ...base, channelName: "2610-live-dealer-ame", status: "failed", scheduledFor: null }, now)).toBe(false);
+
+    // A reprint reuses its campaign's durable job row. Its old creation date
+    // and prior completed attempts must not block a newly missed schedule.
+    const priorJobReprint = {
+      ...base,
+      status: "scheduled" as const,
+      scheduledFor: new Date("2026-10-20T18:14:59.000Z"),
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      attemptCount: 4,
+    };
+    expect(shouldRecoverMailpieceImageJobWithBackstop(priorJobReprint, now)).toBe(true);
   });
 
   it("rejects non-scheduled callers and requires a trusted task identity", () => {

@@ -418,7 +418,7 @@ export async function recordActivityDashboardRefreshRun(taskUid: string, summary
 }
 
 export const MAILPIECE_IMAGE_BACKSTOP_JOB_KEY = "mailpiece_image_backstop";
-export const MAILPIECE_IMAGE_BACKSTOP_TEST_CHANNEL = "2609-abc-test-ame";
+export const MAILPIECE_IMAGE_BACKSTOP_MAX_JOB_AGE_MS = 24 * 60 * 60 * 1000;
 
 /** The backstop registration is separate from an individual campaign's one-time image job. */
 export async function getMailpieceImageBackstopJob() {
@@ -906,24 +906,23 @@ export type MailpieceImageBackstopCandidate = {
 };
 
 /**
- * The periodic worker is a recovery path, not a normal scheduler. During the
- * ABC-only rollout it cannot select any live campaign, even if a caller tries
- * to pass one through a request body.
+ * The periodic worker is a narrow recovery path, not a normal scheduler. It
+ * can recover only a recently scheduled task that never started after its
+ * scheduled time. A completed job or an old historical schedule is never
+ * selected. The current scheduled time, rather than the job's original
+ * creation time, keeps a new reprint eligible when it reuses a prior job row.
  */
 export function shouldRecoverMailpieceImageJobWithBackstop(
   candidate: Omit<MailpieceImageBackstopCandidate, "jobId" | "campaignId" | "taskUid">,
   now = new Date()
 ): boolean {
-  if (candidate.channelName.trim().toLowerCase() !== MAILPIECE_IMAGE_BACKSTOP_TEST_CHANNEL) return false;
-  if (candidate.status === "completed" || candidate.status === "pending") return false;
-  if (candidate.status === "failed") return true;
-  if (candidate.status === "scheduled") {
-    return Boolean(candidate.scheduledFor && candidate.scheduledFor.getTime() < now.getTime() - MAILPIECE_IMAGE_SCHEDULED_CALLBACK_GRACE_MS);
-  }
-  return candidate.updatedAt.getTime() < now.getTime() - MAILPIECE_IMAGE_JOB_STALE_MS;
+  if (candidate.status !== "scheduled") return false;
+  if (!candidate.scheduledFor) return false;
+  if (candidate.scheduledFor.getTime() < now.getTime() - MAILPIECE_IMAGE_BACKSTOP_MAX_JOB_AGE_MS) return false;
+  return candidate.scheduledFor.getTime() < now.getTime() - MAILPIECE_IMAGE_SCHEDULED_CALLBACK_GRACE_MS;
 }
 
-/** Lists only ABC Test's previously-created, overdue durable jobs for the controlled backstop trial. */
+/** Lists recent, overdue workers that never started; request input never selects a campaign. */
 export async function listMailpieceImageBackstopCandidates(now = new Date()): Promise<MailpieceImageBackstopCandidate[]> {
   const db = await getDb();
   if (!db) return [];
@@ -938,8 +937,8 @@ export async function listMailpieceImageBackstopCandidates(now = new Date()): Pr
   }).from(relayMailpieceImageJobs)
     .innerJoin(relayCampaigns, eq(relayCampaigns.id, relayMailpieceImageJobs.campaignId))
     .where(and(
-      eq(relayCampaigns.channelName, MAILPIECE_IMAGE_BACKSTOP_TEST_CHANNEL),
-      inArray(relayMailpieceImageJobs.status, ["scheduled", "scheduling", "processing", "failed"])
+      eq(relayMailpieceImageJobs.status, "scheduled"),
+      gte(relayMailpieceImageJobs.scheduledFor, new Date(now.getTime() - MAILPIECE_IMAGE_BACKSTOP_MAX_JOB_AGE_MS))
     ));
   return rows.filter(row => shouldRecoverMailpieceImageJobWithBackstop(row, now));
 }
@@ -958,11 +957,11 @@ export async function claimMailpieceImageJobForBackstopRecovery(input: {
   const now = input.now ?? new Date();
   if (!shouldRecoverMailpieceImageJobWithBackstop(input.candidate, now)) return false;
   const callbackOverdueBefore = new Date(now.getTime() - MAILPIECE_IMAGE_SCHEDULED_CALLBACK_GRACE_MS);
-  const staleBefore = new Date(now.getTime() - MAILPIECE_IMAGE_JOB_STALE_MS);
-  const condition = or(
-    eq(relayMailpieceImageJobs.status, "failed"),
-    and(eq(relayMailpieceImageJobs.status, "scheduled"), lt(relayMailpieceImageJobs.scheduledFor, callbackOverdueBefore)),
-    and(inArray(relayMailpieceImageJobs.status, ["scheduling", "processing"]), lt(relayMailpieceImageJobs.updatedAt, staleBefore))
+  const recentScheduledAfter = new Date(now.getTime() - MAILPIECE_IMAGE_BACKSTOP_MAX_JOB_AGE_MS);
+  const condition = and(
+    eq(relayMailpieceImageJobs.status, "scheduled"),
+    lt(relayMailpieceImageJobs.scheduledFor, callbackOverdueBefore),
+    gte(relayMailpieceImageJobs.scheduledFor, recentScheduledAfter)
   );
   const result = await db.update(relayMailpieceImageJobs)
     .set({ status: "scheduling", taskUid: null, scheduledFor: null, startedAt: null, finishedAt: null, lastError: null })
@@ -976,6 +975,15 @@ export async function claimMailpieceImageJobForBackstopRecovery(input: {
  * A newly accepted reprint can explicitly reopen a completed job; only the
  * proof-webhook receipt layer is allowed to request that path.
  */
+export const buildMailpieceImageJobScheduleReset = () => ({
+  status: "scheduling" as const,
+  taskUid: null,
+  scheduledFor: null,
+  startedAt: null,
+  finishedAt: null,
+  lastError: null,
+});
+
 export async function claimMailpieceImageJobForScheduling(
   campaignId: number,
   options: { requeueCompleted?: boolean } = {}
@@ -1012,7 +1020,7 @@ export async function claimMailpieceImageJobForScheduling(
     : inArray(relayMailpieceImageJobs.status, ["pending", "failed"]);
   const updateResult = await db
     .update(relayMailpieceImageJobs)
-    .set({ status: "scheduling", lastError: null, finishedAt: null })
+    .set(buildMailpieceImageJobScheduleReset())
     .where(and(eq(relayMailpieceImageJobs.id, job.id), scheduleCondition));
   const changedRows = getDatabaseAffectedRows(updateResult);
   if (changedRows !== 1) {

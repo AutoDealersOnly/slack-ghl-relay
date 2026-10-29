@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ghlHeaders, listDealershipContactIdsByTag, selectExactProductionRecord } from "./ghl";
+import {
+  ghlHeaders,
+  isRetryableGhlMediaUploadConnectionError,
+  listDealershipContactIdsByTag,
+  selectExactProductionRecord,
+  uploadDealershipMediaImage,
+} from "./ghl";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -47,5 +53,41 @@ describe("GHL object request headers", () => {
       filters: [{ field: "tags", operator: "contains", value: "phone" }],
     });
     expect(JSON.stringify(request)).not.toContain("dealer-key");
+  });
+
+  it("retries one dropped Media Library connection with a fresh request body", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("fetch failed"))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ url: "https://media.example/image.jpg" }), { status: 200 }));
+
+    await expect(uploadDealershipMediaImage({
+      locationId: "dealer-location",
+      apiKey: "dealer-key",
+      fileName: "mailpiece.jpg",
+      bytes: new Uint8Array([1, 2, 3]),
+    }, { fetchImpl: fetchMock, retryDelayMs: 0 })).resolves.toBe("https://media.example/image.jpg");
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).body).not.toBe((fetchMock.mock.calls[1]?.[1] as RequestInit).body);
+  });
+
+  it("does not retry a GoHighLevel HTTP permission response", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: "permission denied" }), { status: 401 }));
+
+    await expect(uploadDealershipMediaImage({
+      locationId: "dealer-location",
+      apiKey: "dealer-key",
+      fileName: "mailpiece.jpg",
+      bytes: new Uint8Array([1, 2, 3]),
+    }, { fetchImpl: fetchMock, retryDelayMs: 0 })).rejects.toThrow("status 401");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("classifies only pre-response connection errors as retryable", () => {
+    expect(isRetryableGhlMediaUploadConnectionError(new TypeError("fetch failed"))).toBe(true);
+    expect(isRetryableGhlMediaUploadConnectionError(new TypeError("invalid request body"))).toBe(false);
+    expect(isRetryableGhlMediaUploadConnectionError(new Error("fetch failed"))).toBe(false);
   });
 });

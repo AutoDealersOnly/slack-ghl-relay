@@ -18,6 +18,7 @@ import { redactErrorDetail } from "./security";
 
 const ARCHIVE_TIME_ZONE = "America/New_York";
 export const MAILPIECE_IMAGE_BACKSTOP_CRON = "0 */15 * * * *";
+export const MAILPIECE_IMAGE_MINIMUM_LEAD_MS = 5 * 60 * 1000;
 
 const easternWeekday = (date: Date): string =>
   new Intl.DateTimeFormat("en-US", { timeZone: ARCHIVE_TIME_ZONE, weekday: "short" }).format(date);
@@ -57,12 +58,15 @@ export const buildExactDateCron = (date: Date): string =>
 export const buildExactMinuteDateCron = (date: Date): string =>
   `0 ${date.getUTCMinutes()} ${date.getUTCHours()} ${date.getUTCDate()} ${date.getUTCMonth() + 1} *`;
 
-/** Schedules the callback on a future full minute so platform registration has time to complete. */
+/**
+ * Schedules on a future full minute with enough time for the platform to
+ * persist and provision the one-time callback. A short one- or two-minute
+ * lead can be accepted but missed, after which an exact-date cron rolls to
+ * the following year.
+ */
 export const calculateMailpieceJobRunAt = (now = new Date()): Date => {
-  const runAt = new Date(now);
-  runAt.setUTCSeconds(0, 0);
-  runAt.setUTCMinutes(runAt.getUTCMinutes() + 2);
-  return runAt;
+  const earliestRunAt = now.getTime() + MAILPIECE_IMAGE_MINIMUM_LEAD_MS;
+  return new Date(Math.ceil(earliestRunAt / 60_000) * 60_000);
 };
 
 async function scheduleClaimedMailpieceImageJob(input: {
@@ -109,7 +113,7 @@ async function scheduleClaimedMailpieceImageJob(input: {
   }
 }
 
-/** Creates the one project-level recovery heartbeat. The callback itself remains ABC Test-only. */
+/** Creates the one project-level recovery heartbeat for recent missed image-worker callbacks. */
 export async function ensureMailpieceImageBackstopSchedule(): Promise<"existing" | "created"> {
   const existing = await getMailpieceImageBackstopJob();
   if (existing?.taskUid && existing.isEnabled) return "existing";
@@ -118,15 +122,16 @@ export async function ensureMailpieceImageBackstopSchedule(): Promise<"existing"
     cron: MAILPIECE_IMAGE_BACKSTOP_CRON,
     path: "/api/scheduled/relay/mailpiece-image-backstop",
     method: "POST",
-    description: "ABC Test-only recovery check for overdue BDC mailpiece image workers.",
+    description: "Recovery check for recent BDC mailpiece image workers that never started.",
   }, "");
   await saveMailpieceImageBackstopJob({ taskUid: scheduled.taskUid, cronExpression: MAILPIECE_IMAGE_BACKSTOP_CRON, isEnabled: true });
   return "created";
 }
 
 /**
- * Requeues only ABC Test workers that were already durably created but were
- * missed by their one-time callback. Completed and fresh jobs are excluded.
+ * Requeues only recent workers that were already durably created but never
+ * started. Completed jobs, historical jobs, and jobs that reached an upload
+ * attempt are excluded.
  */
 export async function recoverOverdueMailpieceImageJobs(): Promise<{ reviewed: number; rescheduled: number; skipped: number; failed: number }> {
   const candidates = await listMailpieceImageBackstopCandidates();
@@ -143,7 +148,7 @@ export async function recoverOverdueMailpieceImageJobs(): Promise<{ reviewed: nu
         campaignId: candidate.campaignId,
         channelName: candidate.channelName,
         priorTaskUid: candidate.taskUid,
-        description: "ABC Test-only backstop rescheduled an overdue BDC mailpiece image job.",
+        description: "Recovery backstop rescheduled a recent BDC mailpiece image worker that never started.",
       });
       summary.rescheduled += 1;
     } catch {
@@ -187,7 +192,7 @@ export async function enqueueCampaignMailpieceImageJob(
       campaignId: campaign.id,
       action: "bdc_mailpiece_image_backstop",
       outcome: "failed",
-      detail: `ABC-only mailpiece backstop registration could not be confirmed: ${redactErrorDetail(error)}`,
+      detail: `Mailpiece backstop registration could not be confirmed: ${redactErrorDetail(error)}`,
     })
   );
   return "scheduled";
