@@ -46,6 +46,98 @@ export function isAuthenticatedCronTask(user: { isCron?: boolean; taskUid?: stri
   return user.isCron === true && typeof user.taskUid === "string" && user.taskUid.length > 0;
 }
 
+type ClaimedMailpieceImageJob = NonNullable<Awaited<ReturnType<typeof getMailpieceImageJobByTaskUid>>>;
+
+export type ClaimedMailpieceImageJobDependencies = {
+  getCampaign: typeof getCampaignById;
+  fetchProduction: typeof fetchProductionRecord;
+  uploadImages: typeof uploadCampaignMailpieceImages;
+  completeJob: typeof completeMailpieceImageJob;
+  deleteTask: typeof deleteHeartbeatJob;
+  logAction: typeof logRelayAction;
+  touchJob: typeof touchMailpieceImageJobRun;
+  failJob: typeof failMailpieceImageJobRun;
+};
+
+const claimedMailpieceImageJobDependencies: ClaimedMailpieceImageJobDependencies = {
+  getCampaign: getCampaignById,
+  fetchProduction: fetchProductionRecord,
+  uploadImages: uploadCampaignMailpieceImages,
+  completeJob: completeMailpieceImageJob,
+  deleteTask: deleteHeartbeatJob,
+  logAction: logRelayAction,
+  touchJob: touchMailpieceImageJobRun,
+  failJob: failMailpieceImageJobRun,
+};
+
+/**
+ * The scheduler has a short callback deadline, while a two-page Media Library
+ * upload can legitimately take longer. This work starts only after the task
+ * has been durably claimed and the scheduler has received its acknowledgement.
+ */
+export async function processClaimedMailpieceImageJob(
+  input: { taskUid: string; job: ClaimedMailpieceImageJob },
+  dependencies: ClaimedMailpieceImageJobDependencies = claimedMailpieceImageJobDependencies
+): Promise<void> {
+  const campaignId = input.job.campaignId;
+  try {
+    const campaign = await dependencies.getCampaign(input.job.campaignId);
+    if (!campaign) {
+      await dependencies.completeJob({ taskUid: input.taskUid });
+      return;
+    }
+    const production = await dependencies.fetchProduction(campaign.channelName);
+    if (!production) throw new Error("No current ADO Production record matched the scheduled mailpiece campaign");
+
+    await dependencies.logAction({
+      campaignId: campaign.id,
+      action: "bdc_mailpiece_image_stage",
+      outcome: "success",
+      detail: "Current Production record was loaded for the scheduled BDC mailpiece job.",
+      attemptCount: input.job.attemptCount,
+    });
+
+    await dependencies.uploadImages({
+      campaign,
+      production,
+      onStage: async stage => {
+        await dependencies.touchJob(input.taskUid);
+        await dependencies.logAction({
+          campaignId: campaign.id,
+          action: "bdc_mailpiece_image_stage",
+          outcome: "success",
+          detail: `Scheduled BDC mailpiece job reached stage: ${stage}.`,
+          attemptCount: input.job.attemptCount,
+        });
+      },
+    });
+    await dependencies.completeJob({ taskUid: input.taskUid });
+    await dependencies.deleteTask(input.taskUid, "").catch(() => undefined);
+    await dependencies.logAction({
+      campaignId: campaign.id,
+      action: "bdc_mailpiece_image_job",
+      outcome: "success",
+      detail: "Durable BDC mailpiece image job completed.",
+      attemptCount: input.job.attemptCount,
+    });
+  } catch (error) {
+    const detail = redactErrorDetail(error);
+    await dependencies.failJob({ taskUid: input.taskUid, detail }).catch(() => undefined);
+    await dependencies.logAction({
+      campaignId,
+      action: "bdc_mailpiece_image_job",
+      outcome: "failed",
+      detail: `Durable BDC mailpiece image job failed: ${detail}`,
+    }).catch(() => undefined);
+  }
+}
+
+/** Responds before starting long-running image work so the scheduler cannot cut it off mid-upload. */
+export function acknowledgeClaimedMailpieceImageJob(res: Response, work: () => Promise<void>) {
+  res.status(202).json({ ok: true, accepted: "mailpiece_image_job" });
+  queueMicrotask(() => void work().catch(() => undefined));
+}
+
 async function authenticateCron(req: Request, res: Response) {
   const user = await sdk.authenticateRequest(req);
   if (!isAuthenticatedCronTask(user)) {
@@ -232,18 +324,15 @@ scheduledRelayRouter.post("/mailpiece-image-backstop", async (req: Request, res:
  * deliberately ignored: task ownership is derived exclusively from `taskUid`.
  */
 scheduledRelayRouter.post("/mailpiece-images", async (req: Request, res: Response) => {
-  let taskUid: string | null = null;
-  let campaignId: number | null = null;
   try {
     const user = await authenticateCron(req, res);
     if (!user) return;
-    taskUid = user.taskUid!;
+    const taskUid = user.taskUid!;
     const job = await getMailpieceImageJobByTaskUid(taskUid);
     if (!job) {
       res.json({ ok: true, skipped: "orphan_mailpiece_job" });
       return;
     }
-    campaignId = job.campaignId;
     const claim = await claimMailpieceImageJobRun(taskUid);
     if (!claim.claimed || !claim.job) {
       res.json({ ok: true, skipped: "completed_or_in_progress_mailpiece_job" });
@@ -258,59 +347,10 @@ scheduledRelayRouter.post("/mailpiece-images", async (req: Request, res: Respons
       attemptCount: claim.job.attemptCount,
     });
 
-    const campaign = await getCampaignById(claim.job.campaignId);
-    if (!campaign) {
-      await completeMailpieceImageJob({ taskUid });
-      res.json({ ok: true, skipped: "orphan_campaign" });
-      return;
-    }
-    const production = await fetchProductionRecord(campaign.channelName);
-    if (!production) throw new Error("No current ADO Production record matched the scheduled mailpiece campaign");
-
-    await logRelayAction({
-      campaignId: campaign.id,
-      action: "bdc_mailpiece_image_stage",
-      outcome: "success",
-      detail: "Current Production record was loaded for the scheduled BDC mailpiece job.",
-      attemptCount: claim.job.attemptCount,
-    });
-
-    await uploadCampaignMailpieceImages({
-      campaign,
-      production,
-      onStage: async stage => {
-        await touchMailpieceImageJobRun(taskUid!);
-        await logRelayAction({
-          campaignId: campaign.id,
-          action: "bdc_mailpiece_image_stage",
-          outcome: "success",
-          detail: `Scheduled BDC mailpiece job reached stage: ${stage}.`,
-          attemptCount: claim.job!.attemptCount,
-        });
-      },
-    });
-    await completeMailpieceImageJob({ taskUid });
-    await deleteHeartbeatJob(taskUid, "").catch(() => undefined);
-    await logRelayAction({
-      campaignId: campaign.id,
-      action: "bdc_mailpiece_image_job",
-      outcome: "success",
-      detail: "Durable BDC mailpiece image job completed.",
-      attemptCount: claim.job.attemptCount,
-    });
-    res.json({ ok: true, campaign: campaign.channelName });
+    acknowledgeClaimedMailpieceImageJob(res, () => processClaimedMailpieceImageJob({ taskUid, job: claim.job! }));
   } catch (error) {
     const detail = redactErrorDetail(error);
-    if (taskUid) await failMailpieceImageJobRun({ taskUid, detail }).catch(() => undefined);
-    if (campaignId !== null) {
-      await logRelayAction({
-        campaignId,
-        action: "bdc_mailpiece_image_job",
-        outcome: "failed",
-        detail: `Durable BDC mailpiece image job failed: ${detail}`,
-      }).catch(() => undefined);
-    }
-    res.status(500).json({ error: "mailpiece image job failed", detail, context: { taskUid }, timestamp: new Date().toISOString() });
+    if (!res.headersSent) res.status(500).json({ error: "mailpiece image job failed", detail, timestamp: new Date().toISOString() });
   }
 });
 
