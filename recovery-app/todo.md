@@ -321,7 +321,7 @@
 ## November 6 — restore the confirmed direct Sent to Print image handoff
 
 - [x] Inspect the exact 2611 Lakeland Toyota AME image job and run its existing image action once before code changes. The recovery reached Media Library upload and stopped on 401 missing upload scope; no Proof Stage or other campaign was changed.
-- [ ] After David confirms Lakeland's existing Media Library upload/write permission is saved, retry only that campaign's image action once and verify images, both BDC image values, and the normal completion message.
+- [x] After David confirmed full scopes were saved, retry only Lakeland's image action once: both images uploaded, both BDC image values matched on read-back, and the normal completion message succeeded. No Proof Stage change, repeated Sent to Print notice, other values, or other campaign action.
 - [x] Compare the confirmed September source with the current path. Restore only the direct `uploadCampaignMailpieceImages` call and keep Sent-to-Print/name-only proof requests open through that action; retain receipts, reprints, original messages, renderer, newest non-ENV selection, and one-page back clearing.
 - [x] Complete offline real-route tests, full suite, type-check, and build: 168 tests passed, 13 credential-gated tests skipped. The seven real-route tests verify direct image/value/confirmation ordering before response, name-only payloads, duplicate suppression, reprints, non-print stages, and permission failure; no provider calls occur in these tests.
 - [ ] Publish, then verify an automatic run through the actual existing GoHighLevel proof workflow in ABC Test only. Do not describe this restoration as proven automatic until that run completes without a manual image action or scheduler handoff.
