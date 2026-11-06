@@ -47,7 +47,7 @@ relayRouter.post("/ghl/:eventType", async (req: Request, res: Response) => {
     return;
   }
   if (legacyHandler === "proof") {
-    handleLegacyProofStatusWebhook(req, res);
+    await handleLegacyProofStatusWebhook(req, res);
     return;
   }
   if (legacyHandler === "create") {

@@ -1,6 +1,7 @@
 import { buildProductionCanvas } from "./canvas";
 import { ensureCampaignActivityDashboard } from "./activity-dashboard";
 import { getRelayConfig } from "./config";
+import { uploadCampaignMailpieceImages } from "./mailpiece-images";
 import {
   campaignCustomValues,
   dealershipCustomValues,
@@ -281,18 +282,18 @@ export async function sendProofStageNotice(payload: ProductionWebhookPayload) {
     isSentToPrint: isSentToPrintProofStage(proofStage),
     postNotice: () => postSlackMessage(campaign.channelId!, message),
     logNotice: () => logRelayAction({ campaignId: campaign.id, action: "proof_stage_notice", outcome: "success", detail: "Proof-stage notice posted to the campaign channel." }),
-    // The webhook has already acknowledged GoHighLevel. Queue the longer PDF,
-    // render, Media Library, and custom-value work in its authenticated durable
-    // worker instead of keeping it alive in this detached request.
+    // Restore the confirmed September notice-first path. The proof receiver
+    // keeps Sent-to-Print work attached to its request through image completion.
+    // Do not replace this call with a scheduled or post-response handoff.
     processMailpieceImages: async () => {
-      await queueSentToPrintMailpieceImages(campaign);
+      await uploadCampaignMailpieceImages({ campaign, production: context.production });
     },
     logMailpieceProcessingFailure: error =>
       logRelayAction({
         campaignId: campaign.id,
         action: "bdc_mailpiece_images",
         outcome: "failed",
-        detail: `Sent-to-Print notice posted, but the durable BDC mailpiece job could not be queued: ${redactErrorDetail(error)}`,
+        detail: `Sent-to-Print notice posted, but BDC mailpiece image processing did not complete: ${redactErrorDetail(error)}`,
       }),
   });
 }

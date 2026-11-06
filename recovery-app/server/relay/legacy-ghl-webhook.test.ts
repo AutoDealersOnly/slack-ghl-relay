@@ -53,25 +53,58 @@ describe("legacy GHL Canvas-refresh webhook payload", () => {
     expect(selectLegacyHeaderlessHandler("push_campaign_values", true)).toBeNull();
   });
 
-  it("acknowledges Sent to Print before the existing notice and image work finishes", async () => {
+  it("keeps Sent to Print attached to its request until the notice and image work finish", async () => {
     let releaseReceipt: ((value: { accepted: boolean }) => void) | undefined;
+    let releaseNotice: (() => void) | undefined;
     const dependencies = proofDependencies({
       createReceipt: vi.fn(() => new Promise(resolve => { releaseReceipt = resolve; })),
+      sendNotice: vi.fn(() => new Promise<void>(resolve => { releaseNotice = resolve; })),
     });
     const response = {
       status: vi.fn().mockReturnThis(),
       send: vi.fn(),
     } as unknown as Response;
 
-    handleLegacyProofStatusWebhook({ body: proofPayload } as Request, response, dependencies);
+    const work = handleLegacyProofStatusWebhook({ body: proofPayload } as Request, response, dependencies);
 
-    expect(response.status).toHaveBeenCalledWith(200);
-    expect(response.send).toHaveBeenCalledWith("ok");
+    expect(response.send).not.toHaveBeenCalled();
     expect(dependencies.sendNotice).not.toHaveBeenCalled();
 
     await vi.waitFor(() => expect(dependencies.createReceipt).toHaveBeenCalledOnce());
     releaseReceipt?.({ accepted: true });
     await vi.waitFor(() => expect(dependencies.sendNotice).toHaveBeenCalledWith(proofPayload));
+    expect(response.send).not.toHaveBeenCalled();
+    releaseNotice?.();
+    await work;
+    expect(dependencies.finishReceipt).toHaveBeenCalledWith(expect.any(String), "processed");
+    expect(response.status).toHaveBeenCalledWith(200);
+    expect(response.send).toHaveBeenCalledWith("ok");
+  });
+
+  it("also awaits name-only requests whose fresh record supplies Sent to Print", async () => {
+    let release: (() => void) | undefined;
+    const dependencies = proofDependencies({
+      resolveDelivery: vi.fn(async payload => ({ payload: { ...payload, proof_stage: "sent_to_print" }, recordVersion: "saved" })),
+      sendNotice: vi.fn(() => new Promise<void>(resolve => { release = resolve; })),
+    });
+    const response = { status: vi.fn().mockReturnThis(), send: vi.fn() } as unknown as Response;
+    const work = handleLegacyProofStatusWebhook({ body: { production_name: proofPayload.production_name } } as Request, response, dependencies);
+    await vi.waitFor(() => expect(dependencies.sendNotice).toHaveBeenCalledOnce());
+    expect(response.send).not.toHaveBeenCalled();
+    release?.();
+    await work;
+    expect(response.send).toHaveBeenCalledWith("ok");
+  });
+
+  it("retains immediate acknowledgement for explicitly supplied non-print proof stages", async () => {
+    let release: (() => void) | undefined;
+    const dependencies = proofDependencies({ sendNotice: vi.fn(() => new Promise<void>(resolve => { release = resolve; })) });
+    const response = { status: vi.fn().mockReturnThis(), send: vi.fn() } as unknown as Response;
+    await handleLegacyProofStatusWebhook({ body: { ...proofPayload, proof_stage: "Request Proof" } } as Request, response, dependencies);
+    expect(response.send).toHaveBeenCalledWith("ok");
+    await vi.waitFor(() => expect(dependencies.sendNotice).toHaveBeenCalledOnce());
+    release?.();
+    await vi.waitFor(() => expect(dependencies.finishReceipt).toHaveBeenCalledOnce());
   });
 
   it("does not repeat the Sent to Print notice or image work for a duplicate delivery", async () => {

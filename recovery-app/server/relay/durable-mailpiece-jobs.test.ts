@@ -11,7 +11,7 @@ import { isAuthenticatedCronTask } from "./scheduled-routes";
 import { postProofNoticeThenProcessMailpieceImages, queueSentToPrintMailpieceImages } from "./workflows";
 
 describe("Sent-to-Print BDC image processing", () => {
-  it("hands Sent-to-Print image work to the existing durable queue instead of rendering in the acknowledged webhook", async () => {
+  it("preserves the legacy queue helper for existing workers; the restored direct route is tested separately", async () => {
     const enqueue = vi.fn(async () => "scheduled" as const);
 
     await expect(

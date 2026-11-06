@@ -9,7 +9,7 @@ import {
   type DealershipWebhookPayload,
   type ProductionWebhookPayload,
 } from "./types";
-import { ensureCampaignChannelAndCanvas, refreshProductionCanvas, sendProofStageNotice, syncCampaignValues, syncDealershipValues } from "./workflows";
+import { ensureCampaignChannelAndCanvas, isSentToPrintProofStage, refreshProductionCanvas, sendProofStageNotice, syncCampaignValues, syncDealershipValues } from "./workflows";
 
 /**
  * Parses the exact lightweight payload used by the former Production Update
@@ -113,8 +113,8 @@ const legacyProofStatusWorkDependencies: LegacyProofStatusWorkDependencies = {
 };
 
 /**
- * The preserved proof notice and BDC image work continue after GoHighLevel
- * receives its immediate acknowledgement. A receipt blocks a delivery retry
+ * The preserved proof notice and direct BDC image work share one receipt.
+ * A receipt blocks a delivery retry
  * from posting another Sent to Print message while that original work runs.
  */
 export async function processLegacyProofStatusWebhook(
@@ -147,11 +147,12 @@ export async function processLegacyProofStatusWebhook(
 }
 
 /**
- * The legacy GoHighLevel proof webhook must return immediately. Sent-to-Print
- * BDC processing continues in the existing duplicate-safe worker after that
- * acknowledgement, just like the other legacy relay handlers.
+ * Restore the confirmed direct Sent-to-Print request path, retaining the later
+ * duplicate/reprint protection. Name-only legacy deliveries must also wait:
+ * their fresh Proof Stage is resolved inside the receipt processor. Explicit
+ * non-print proof stages retain their original immediate acknowledgement.
  */
-export const handleLegacyProofStatusWebhook = (
+export const handleLegacyProofStatusWebhook = async (
   req: Request,
   res: Response,
   dependencies: LegacyProofStatusWorkDependencies = legacyProofStatusWorkDependencies
@@ -167,8 +168,22 @@ export const handleLegacyProofStatusWebhook = (
     return;
   }
 
+  if (payload.proof_stage?.trim() && !isSentToPrintProofStage(payload.proof_stage)) {
+    res.status(200).send("ok");
+    void processLegacyProofStatusWebhook(payload, dependencies).catch(() => undefined);
+    return;
+  }
+
+  try {
+    await processLegacyProofStatusWebhook(payload, dependencies);
+  } catch (error) {
+    await dependencies.logAction({
+      action: "legacy_proof_status_webhook",
+      outcome: "failed",
+      detail: `Direct proof request did not complete: ${redactErrorDetail(error)}`,
+    }).catch(() => undefined);
+  }
   res.status(200).send("ok");
-  void processLegacyProofStatusWebhook(payload, dependencies).catch(() => undefined);
 };
 
 /**
