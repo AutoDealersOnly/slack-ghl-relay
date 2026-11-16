@@ -325,3 +325,11 @@
 - [x] Compare the confirmed September source with the current path. Restore only the direct `uploadCampaignMailpieceImages` call and keep Sent-to-Print/name-only proof requests open through that action; retain receipts, reprints, original messages, renderer, newest non-ENV selection, and one-page back clearing.
 - [x] Complete offline real-route tests, full suite, type-check, and build: 168 tests passed, 13 credential-gated tests skipped. The seven real-route tests verify direct image/value/confirmation ordering before response, name-only payloads, duplicate suppression, reprints, non-print stages, and permission failure; no provider calls occur in these tests.
 - [ ] Publish, then verify an automatic run through the actual existing GoHighLevel proof workflow in ABC Test only. Do not describe this restoration as proven automatic until that run completes without a manual image action or scheduler handoff.
+
+## November 16 — Taylor Hyundai exact image-only recovery
+
+- [x] Respect David's full-scopes confirmation and inspect only the affected campaign; the initial automatic front record was incomplete, and the first image-only retry stopped at the 45-second GoHighLevel Media timeout.
+- [x] Perform a read-only check for the expected front image before another upload; no matching saved file was returned.
+- [x] Run the one additionally authorized Taylor-only image action: both images saved and accessible, both BDC values matched fresh read-back, and the normal completion message was delivered and logged at approximately 8:39 AM Eastern. No Proof Stage, workflow, dates, credentials, other values, other campaigns, or repeated Sent to Print notice.
+- [x] Remove all one-use Taylor helpers; record Taylor and the preceding Garvey scope/download recovery without treating either as an automatic test.
+- [ ] Verify the genuine automatic path in ABC Test through the existing published GHL proof workflow, with no manual image action. The cause of Taylor's original unfinished automatic front-page claim is not yet proven; do not replace the existing architecture speculatively.

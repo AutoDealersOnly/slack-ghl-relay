@@ -45,3 +45,7 @@ Finally, document the new published relay URL and the test result in **Manus Key
 ## Future adjustments
 
 Use `FUTURE_CHANGE_PROCEDURE.md` for every requested change to a restored function. It sets the required sequence: start from this index and the private Manus Keys and Codes, make only the requested adjustment, test in ABC Dealer when a live operation is affected, obtain visual confirmation where relevant, update the private record, and push the tested secret-free change to the recovery branch.
+
+## November 16 mailpiece recovery status
+
+Taylor Hyundai's exact administrator-authorized image-only recovery completed at approximately 8:39 AM Eastern. Both Media images and both BDC image values were verified, and the normal completion message was delivered. The previous retry had timed out at GoHighLevel Media upload; a read-only check found no expected saved front image before David approved one additional action. The preceding Garvey Nissan recovery also completed after full scopes were restored and a separately approved retry resolved a Slack download timeout. These were requested recoveries, not live-campaign tests. No automation source, Proof Stage, workflow, credentials, dates, or unrelated campaign behavior was changed. See `BDC_MAILPIECE_IMAGES.md` for the evidence and safeguards. Genuine automatic verification using the existing GHL workflow in ABC Test remains pending.
