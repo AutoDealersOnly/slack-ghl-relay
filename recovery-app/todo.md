@@ -343,3 +343,5 @@
 - [x] Prepare the exact ABC-only stage observer and prove isolation/nonfatal bounded logging in offline tests: 35 focused tests; 182 full-suite passed, 13 credential-gated skipped; type-check/build passed.
 - [ ] Review the requested 12:08/12:14 GHL execution details and choose a targeted functional repair for the interruption and duplicate notice; the ABC-only observer is not that repair.
 - [ ] Publish the ABC-only diagnostic when needed, then run and verify the actual existing GHL workflow in ABC Test with fresh artwork; no manual image helper and no active-campaign experiments.
+
+- [x] After David explicitly requested manual completion of the watched Lugoff reprint, run its existing image action once: reuse saved front, complete back, verify both saved/accessible images and both fresh BDC image values, and confirm normal message success at 12:33:55 PM. No Proof Stage, repeated Sent to Print notice, workflow, or other campaign change; one-use helper removed. This is recovery, not proof of automatic reliability.
