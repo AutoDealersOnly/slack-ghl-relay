@@ -2,6 +2,7 @@ import { buildProductionCanvas } from "./canvas";
 import { ensureCampaignActivityDashboard } from "./activity-dashboard";
 import { getRelayConfig } from "./config";
 import { uploadCampaignMailpieceImages } from "./mailpiece-images";
+import { createAbcMailpieceStageObserver } from "./mailpiece-stage-observer";
 import {
   campaignCustomValues,
   dealershipCustomValues,
@@ -278,15 +279,17 @@ export async function sendProofStageNotice(payload: ProductionWebhookPayload) {
     });
     return;
   }
+  const isSentToPrint = isSentToPrintProofStage(proofStage);
+  const onStage = createAbcMailpieceStageObserver({ campaign, isSentToPrint, logAction: logRelayAction });
   await postProofNoticeThenProcessMailpieceImages({
-    isSentToPrint: isSentToPrintProofStage(proofStage),
+    isSentToPrint,
     postNotice: () => postSlackMessage(campaign.channelId!, message),
-    logNotice: () => logRelayAction({ campaignId: campaign.id, action: "proof_stage_notice", outcome: "success", detail: "Proof-stage notice posted to the campaign channel." }),
+    logNotice: () => logRelayAction({ campaignId: campaign.id, action: "proof_stage_notice", outcome: "success", detail: onStage ? "Proof-stage notice posted to the campaign channel; mapped stage: sent_to_print (ABC observation)." : "Proof-stage notice posted to the campaign channel." }),
     // Restore the confirmed September notice-first path. The proof receiver
     // keeps Sent-to-Print work attached to its request through image completion.
     // Do not replace this call with a scheduled or post-response handoff.
     processMailpieceImages: async () => {
-      await uploadCampaignMailpieceImages({ campaign, production: context.production });
+      await uploadCampaignMailpieceImages({ campaign, production: context.production, ...(onStage ? { onStage } : {}) });
     },
     logMailpieceProcessingFailure: error =>
       logRelayAction({

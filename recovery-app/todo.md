@@ -333,3 +333,13 @@
 - [x] Run the one additionally authorized Taylor-only image action: both images saved and accessible, both BDC values matched fresh read-back, and the normal completion message was delivered and logged at approximately 8:39 AM Eastern. No Proof Stage, workflow, dates, credentials, other values, other campaigns, or repeated Sent to Print notice.
 - [x] Remove all one-use Taylor helpers; record Taylor and the preceding Garvey scope/download recovery without treating either as an automatic test.
 - [ ] Verify the genuine automatic path in ABC Test through the existing published GHL proof workflow, with no manual image action. The cause of Taylor's original unfinished automatic front-page claim is not yet proven; do not replace the existing architecture speculatively.
+
+## November 17 — Lugoff automatic reprint and ABC-only diagnosis
+
+- [x] Recover Lugoff once after David saved full scopes: both images, both BDC values, and the normal completion message verified at approximately 9:52 AM; original failure was a Media upload 401.
+- [x] Monitor the changed-artwork reprint read-only: the new front uploaded at 12:14:23 PM, but the back remained unfinished through 12:20:50 PM, with no recorded image completion/error. Do not start another active-campaign image action without explicit authorization.
+- [x] Trace the available source evidence for duplicate notices; identify the record-wide version receipt weakness without attributing the extra notice to it without execution details.
+- [x] Confirm official workflow-history API access is unavailable because ADO is not enabled for that private beta; do not replace or alter credentials. Request published-workflow View Details screenshots without Retry or workflow edits.
+- [x] Prepare the exact ABC-only stage observer and prove isolation/nonfatal bounded logging in offline tests: 35 focused tests; 182 full-suite passed, 13 credential-gated skipped; type-check/build passed.
+- [ ] Review the requested 12:08/12:14 GHL execution details and choose a targeted functional repair for the interruption and duplicate notice; the ABC-only observer is not that repair.
+- [ ] Publish the ABC-only diagnostic when needed, then run and verify the actual existing GHL workflow in ABC Test with fresh artwork; no manual image helper and no active-campaign experiments.

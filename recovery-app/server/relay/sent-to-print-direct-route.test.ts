@@ -182,7 +182,7 @@ beforeEach(() => {
     steps.push(`receipt-${status}`);
   });
   mocks.logRelayAction.mockImplementation(async ({ action, outcome }) => {
-    steps.push(`${action}:${outcome}`);
+    if (action !== "bdc_mailpiece_image_stage") steps.push(`${action}:${outcome}`);
   });
   mocks.getCurrentChannelMailpiecePdfs.mockImplementation(async channelId => {
     steps.push("file-list");
@@ -438,6 +438,89 @@ describe("headerless Sent-to-Print direct relay route", () => {
       upload.resolve("ABC-release");
       await delivery.finished;
       await vi.waitFor(() => expect([...receipts.values()]).not.toContain("processing"));
+    }
+  });
+
+  it("records fixed ABC stages before deferred rendering and Media calls without changing completion order", async () => {
+    const render = deferred<Uint8Array[]>();
+    mocks.renderPdfPagesToJpegs.mockImplementationOnce(() => render.promise);
+    const delivery = deliver({ production_name: campaign.productionName, proof_stage: "sent_to_print" });
+    const reached = () => mocks.logRelayAction.mock.calls
+      .map(([entry]) => entry)
+      .filter(entry => entry.action === "bdc_mailpiece_image_stage")
+      .map(entry => String(entry.detail).match(/reached stage: ([a-z-]+);/)?.[1]);
+    try {
+      await vi.waitFor(() => expect(mocks.renderPdfPagesToJpegs).toHaveBeenCalledOnce());
+      expect(reached()).toEqual(["dealership-lookup", "slack-file-list", "pdf-page-count", "pdf-download-front", "pdf-render-front"]);
+      expect(mocks.uploadDealershipMediaImage).not.toHaveBeenCalled();
+      expectNoResponse(delivery);
+      render.resolve([jpegBytes]);
+      await delivery.finished;
+      expectOk(delivery);
+      expect(reached()).toEqual([
+        "dealership-lookup", "slack-file-list", "pdf-page-count",
+        "pdf-download-front", "pdf-render-front", "media-upload-front",
+        "pdf-download-back", "pdf-render-back", "media-upload-back", "custom-values", "slack-confirmation",
+      ]);
+      expect(mocks.logRelayAction).toHaveBeenCalledWith(expect.objectContaining({
+        action: "proof_stage_notice", detail: expect.stringContaining("mapped stage: sent_to_print"),
+      }));
+      expect(steps.slice(-5)).toEqual(["values-written", "confirmation", "bdc_mailpiece_images:success", "receipt-processed", "response"]);
+    } finally {
+      render.resolve([jpegBytes]);
+      await delivery.finished;
+    }
+  });
+
+  it("continues the original ABC image action when observation writes fail", async () => {
+    mocks.logRelayAction.mockImplementation(async ({ action, outcome }) => {
+      if (action === "bdc_mailpiece_image_stage") throw new Error("ABC observation unavailable");
+      steps.push(`${action}:${outcome}`);
+    });
+    const delivery = deliver({ production_name: campaign.productionName, proof_stage: "sent_to_print" });
+    await delivery.finished;
+    expectOk(delivery);
+    expect(mocks.uploadDealershipMediaImage).toHaveBeenCalledTimes(2);
+    expect(mocks.syncRequiredCustomValues).toHaveBeenCalledOnce();
+    expect(mocks.postSlackMessage).toHaveBeenLastCalledWith(campaign.channelId, confirmationText);
+    expect([...receipts.values()]).toEqual(["processed"]);
+  });
+
+  it("attaches no observer or changed notice detail to a non-ABC campaign", async () => {
+    mocks.getCampaignByChannelName.mockResolvedValue({ ...campaign, channelName: "2611-non-abc-fixture" });
+    const delivery = deliver({ production_name: campaign.productionName, proof_stage: "sent_to_print" });
+    await delivery.finished;
+    expectOk(delivery);
+    expect(mocks.logRelayAction.mock.calls.some(([entry]) => entry.action === "bdc_mailpiece_image_stage")).toBe(false);
+    expect(mocks.logRelayAction).toHaveBeenCalledWith(expect.objectContaining({
+      action: "proof_stage_notice", detail: "Proof-stage notice posted to the campaign channel.",
+    }));
+    expect(mocks.uploadDealershipMediaImage).toHaveBeenCalledTimes(2);
+    expect(mocks.syncRequiredCustomValues).toHaveBeenCalledOnce();
+  });
+
+  it("suppresses a concurrent same-version retry while ABC rendering is still pending", async () => {
+    const render = deferred<Uint8Array[]>();
+    mocks.renderPdfPagesToJpegs.mockImplementationOnce(() => render.promise);
+    const body = { production_name: campaign.productionName, proof_stage: "sent_to_print" };
+    const first = deliver(body);
+    try {
+      await vi.waitFor(() => expect(mocks.renderPdfPagesToJpegs).toHaveBeenCalledOnce());
+      const retry = deliver(body);
+      await retry.finished;
+      expectOk(retry);
+      expectNoResponse(first);
+      expect(mocks.postSlackMessage).toHaveBeenCalledOnce();
+      expect(mocks.getCurrentChannelMailpiecePdfs).toHaveBeenCalledOnce();
+      expect(mocks.uploadDealershipMediaImage).not.toHaveBeenCalled();
+      render.resolve([jpegBytes]);
+      await first.finished;
+      expectOk(first);
+      expect(mocks.uploadDealershipMediaImage).toHaveBeenCalledTimes(2);
+      expect(mocks.postSlackMessage).toHaveBeenCalledTimes(2);
+    } finally {
+      render.resolve([jpegBytes]);
+      await first.finished;
     }
   });
 });
